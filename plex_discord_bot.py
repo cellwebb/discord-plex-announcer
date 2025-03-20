@@ -1,3 +1,16 @@
+"""
+Plex Discord Bot - Send notifications to Discord when new media is added to Plex.
+
+This bot monitors Plex libraries for new movies and TV shows, then sends formatted 
+notifications to a Discord channel. It features:
+- Notifications for all new movies
+- Selective notifications for TV shows (recently aired or first episodes of new shows)
+- Grouping of episodes from the same show to reduce notification clutter
+- Rich embeds with media details, posters, and metadata
+
+Configuration is done via environment variables or command line arguments.
+"""
+
 import argparse
 import json
 import logging
@@ -24,7 +37,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 PLEX_URL = os.getenv("PLEX_URL", "http://localhost:32400")
 PLEX_TOKEN = os.getenv("PLEX_TOKEN")
-CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "300"))  # Default to 5 minutes
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "300"))
 MOVIE_LIBRARY = os.getenv("MOVIE_LIBRARY", "Movies")
 TV_LIBRARY = os.getenv("TV_LIBRARY", "TV Shows")
 NOTIFY_MOVIES = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
@@ -39,6 +52,13 @@ processed_movies: Set[str] = set()
 
 
 class PlexMonitor:
+    """
+    Handles connection to Plex server and retrieves information about media libraries.
+
+    This class manages the connection to a Plex Media Server and provides methods to
+    search and retrieve information about recently added movies and TV episodes.
+    """
+
     def __init__(self, plex_url: str, plex_token: str):
         self.plex_url = plex_url
         self.plex_token = plex_token
@@ -46,7 +66,7 @@ class PlexMonitor:
         self.connect()
 
     def connect(self) -> bool:
-        """Connect to the Plex server"""
+        """Establish connection to the Plex server."""
         try:
             self.plex = PlexServer(self.plex_url, self.plex_token)
             logger.info(f"Connected to Plex server at {self.plex_url}")
@@ -56,7 +76,7 @@ class PlexMonitor:
             return False
 
     def get_library(self, library_name: str):
-        """Get a specific library section"""
+        """Get a specific library section from Plex."""
         if not self.plex:
             if not self.connect():
                 return None
@@ -70,7 +90,7 @@ class PlexMonitor:
             return None
 
     def get_recently_added_movies(self, library_name: str, days: int = 1) -> List[Dict]:
-        """Get recently added movies from the Plex library"""
+        """Get a list of movies added to Plex within the specified time period."""
         if not self.plex:
             if not self.connect():
                 return []
@@ -106,13 +126,10 @@ class PlexMonitor:
                             "directors": [
                                 director.tag for director in getattr(movie, "directors", [])
                             ],
-                            "actors": [actor.tag for actor in getattr(movie, "roles", [])][
-                                :3
-                            ],  # Limit to top 3 actors
+                            "actors": [actor.tag for actor in getattr(movie, "roles", [])][:3],
                         }
                     )
                 else:
-                    # Since we're sorting by addedAt descending, we can break once we hit older movies
                     break
 
             return new_movies
@@ -121,7 +138,7 @@ class PlexMonitor:
             return []
 
     def get_recently_added_episodes(self, library_name: str, days: int = 1) -> List[Dict]:
-        """Get recently added TV episodes from the Plex library"""
+        """Get a list of TV episodes added to Plex within the specified time period."""
         if not self.plex:
             if not self.connect():
                 return []
@@ -131,15 +148,12 @@ class PlexMonitor:
             if not library:
                 return []
 
-            # Get episodes added in the last 'days' days
             cutoff_date = datetime.now() - timedelta(days=days)
             recent_episodes = library.searchEpisodes(sort="addedAt:desc")
 
-            # Filter episodes that were added after the cutoff date
             new_episodes = []
             for episode in recent_episodes:
                 if episode.addedAt > cutoff_date:
-                    # Convert to dictionary for easier processing
                     poster_url = None
                     if episode.thumb:
                         poster_url = (
@@ -150,12 +164,10 @@ class PlexMonitor:
                     if episode.grandparentThumb:
                         show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"
 
-                    # Get original air date if available
                     air_date = None
                     if hasattr(episode, "originallyAvailableAt") and episode.originallyAvailableAt:
                         air_date = episode.originallyAvailableAt
 
-                    # Episode data
                     new_episodes.append(
                         {
                             "type": "episode",
@@ -177,13 +189,10 @@ class PlexMonitor:
                                 director.tag for director in getattr(episode, "directors", [])
                             ],
                             "writers": [writer.tag for writer in getattr(episode, "writers", [])],
-                            "actors": [actor.tag for actor in getattr(episode, "roles", [])][
-                                :3
-                            ],  # Limit to top 3 actors
+                            "actors": [actor.tag for actor in getattr(episode, "roles", [])][:3],
                         }
                     )
                 else:
-                    # Since we're sorting by addedAt descending, we can break once we hit older episodes
                     break
 
             return new_episodes
@@ -192,28 +201,23 @@ class PlexMonitor:
             return []
 
     def is_first_episode_of_show(self, show_title: str, processed_media: Set[str]) -> bool:
-        """Check if this is the first episode of this show that we've processed"""
+        """Determine if this is the first episode of a show that has been processed."""
         if not self.plex:
             if not self.connect():
                 return False
 
         try:
-            # Search all TV libraries for this show
             shows = self.plex.library.search(title=show_title, libtype="show")
             if not shows:
                 return False
 
             show = shows[0]
-
-            # Get all episodes of this show
             episodes = show.episodes()
 
-            # Check if any episodes from this show have been processed
             for episode in episodes:
                 if episode.key in processed_media:
                     return False
 
-            # If we get here, no episodes from this show have been processed
             return True
         except Exception as e:
             logger.error(f"Error checking if first episode of show: {e}")
@@ -221,7 +225,7 @@ class PlexMonitor:
 
 
 def load_processed_movies() -> Set[str]:
-    """Load the list of already processed media items from file"""
+    """Load the set of already processed media keys from disk."""
     try:
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, "r") as f:
@@ -233,7 +237,7 @@ def load_processed_movies() -> Set[str]:
 
 
 def save_processed_movies(movies: Set[str]) -> None:
-    """Save the list of processed media items to file"""
+    """Save the set of processed media keys to disk."""
     try:
         with open(DATA_FILE, "w") as f:
             json.dump(list(movies), f)
@@ -242,7 +246,7 @@ def save_processed_movies(movies: Set[str]) -> None:
 
 
 def format_duration(milliseconds: int) -> str:
-    """Format milliseconds to HH:MM format"""
+    """Format a duration in milliseconds to a human-readable string (e.g., "2h 15m")."""
     total_seconds = milliseconds // 1000
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
@@ -251,14 +255,23 @@ def format_duration(milliseconds: int) -> str:
 
 @bot.event
 async def on_ready():
-    """Called when the bot is ready"""
+    """Handler called when the Discord bot is ready and connected."""
     logger.info(f"Bot logged in as {bot.user}")
     check_for_new_media.start()
 
 
 @tasks.loop(seconds=CHECK_INTERVAL)
 async def check_for_new_media():
-    """Check for new movies and TV episodes and send notifications"""
+    """
+    Periodic task that checks for new media in Plex and sends Discord notifications.
+
+    This function runs at regular intervals (defined by CHECK_INTERVAL) and:
+    1. Checks for new movies and sends notifications for all of them
+    2. Checks for new TV episodes, but only notifies for:
+       - Recently aired episodes (last 30 days)
+       - First episode of shows new to the server
+    3. Groups episodes from the same show to reduce notification clutter
+    """
     global processed_movies
 
     channel = bot.get_channel(CHANNEL_ID)
@@ -268,7 +281,6 @@ async def check_for_new_media():
 
     logger.info("Checking for new media...")
 
-    # Initialize the Plex monitor
     plex_monitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
 
     # Check for new movies if enabled
@@ -279,13 +291,11 @@ async def check_for_new_media():
         for movie in recent_movies:
             movie_key = movie["key"]
 
-            # Skip if we've already processed this movie
             if movie_key in processed_movies:
                 continue
 
             logger.info(f"Found new movie: {movie['title']} ({movie['year']})")
 
-            # Create a nice embed for Discord
             embed = discord.Embed(
                 title=f"🎬 New Movie Available: {movie['title']} ({movie['year']})",
                 description=(
@@ -294,7 +304,6 @@ async def check_for_new_media():
                 color=0x00FF00,
             )
 
-            # Add movie details
             if movie["rating"]:
                 embed.add_field(name="Rating", value=f"⭐ {movie['rating']:.1f}/10", inline=True)
 
@@ -312,29 +321,23 @@ async def check_for_new_media():
             if movie["actors"]:
                 embed.add_field(name="Starring", value=", ".join(movie["actors"]), inline=True)
 
-            # Add the poster as thumbnail if available
             if movie["poster_url"]:
                 embed.set_thumbnail(url=movie["poster_url"])
 
-            # Add timestamp
             embed.timestamp = datetime.now()
             embed.set_footer(text="Added to Plex")
 
-            # Send the message
             try:
                 await channel.send(embed=embed)
                 logger.info(f"Sent notification for movie: {movie['title']}")
 
-                # Add to processed movies
                 processed_movies.add(movie_key)
                 save_processed_movies(processed_movies)
 
-                # Sleep briefly to avoid rate limiting
                 time.sleep(1)
             except Exception as e:
                 logger.error(f"Error sending movie notification: {e}")
 
-    # Check for new TV episodes if enabled
     if NOTIFY_TV:
         logger.info(f"Checking for new TV episodes in library: {TV_LIBRARY}")
         recent_episodes = plex_monitor.get_recently_added_episodes(TV_LIBRARY, days=1)
@@ -342,7 +345,6 @@ async def check_for_new_media():
         for episode in recent_episodes:
             episode_key = episode["key"]
 
-            # Skip if we've already processed this episode
             if episode_key in processed_movies:
                 continue
 
@@ -408,15 +410,20 @@ async def check_for_new_media():
 
 @bot.command(name="checkplex")
 async def check_plex(ctx):
-    """Manual command to check for new media"""
-    await ctx.send("Checking for new movies and TV episodes...")
+    """
+    Discord command to manually check for new media.
+
+    This command allows Discord users to manually trigger a check for new media
+    rather than waiting for the scheduled interval.
+    """
+    await ctx.send("Checking for new media...")
     await check_for_new_media()
     await ctx.send("Check complete!")
 
 
 @bot.command(name="status")
 async def status(ctx):
-    """Show bot status"""
+    """Discord command to display the current bot status and configuration."""
     global processed_movies
 
     embed = discord.Embed(
@@ -445,13 +452,17 @@ async def status(ctx):
 
 
 def main():
-    """Main function to run the bot"""
+    """
+    Main function to run the bot.
+
+    Handles command-line argument parsing, configuration validation,
+    and starting the Discord bot.
+    """
     global processed_movies, DISCORD_TOKEN, CHANNEL_ID, PLEX_URL, PLEX_TOKEN, CHECK_INTERVAL
     global MOVIE_LIBRARY, TV_LIBRARY, NOTIFY_MOVIES, NOTIFY_TV, DATA_FILE
 
-    # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description="Plex Discord Bot - Send notifications for new movies and TV episodes"
+        description="Plex Discord Bot - Notifications for new movies and TV episodes"
     )
     parser.add_argument("--token", help="Discord bot token")
     parser.add_argument("--channel", type=int, help="Discord channel ID")
