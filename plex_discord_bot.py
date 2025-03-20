@@ -4,16 +4,13 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Set
 
 import discord
-import requests
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from plexapi.server import PlexServer
-from plexapi.video import Episode, Movie
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -21,10 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("plex_discord_bot")
 
-# Load environment variables from .env file
 load_dotenv()
-
-# Bot configuration
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 PLEX_URL = os.getenv("PLEX_URL", "http://localhost:32400")
@@ -36,12 +30,10 @@ NOTIFY_MOVIES = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
 NOTIFY_TV = os.getenv("NOTIFY_TV", "true").lower() == "true"
 DATA_FILE = os.getenv("DATA_FILE", "processed_media.json")
 
-# Initialize bot with intents
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Global state
 processed_movies: Set[str] = set()
 
 
@@ -87,11 +79,9 @@ class PlexMonitor:
             if not library:
                 return []
 
-            # Get movies added in the last 'days' days
             cutoff_date = datetime.now() - timedelta(days=days)
             recent_movies = library.search(libtype="movie", sort="addedAt:desc")
 
-            # Filter movies that were added after the cutoff date
             new_movies = []
             for movie in recent_movies:
                 if movie.addedAt > cutoff_date:
@@ -167,6 +157,14 @@ class PlexMonitor:
                     if episode.grandparentThumb:
                         show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"
 
+                    # Get original air date if available
+                    air_date = None
+                    if (
+                        hasattr(episode, "originallyAvailableAt")
+                        and episode.originallyAvailableAt
+                    ):
+                        air_date = episode.originallyAvailableAt
+
                     # Episode data
                     new_episodes.append(
                         {
@@ -177,6 +175,7 @@ class PlexMonitor:
                             "season_number": episode.parentIndex,
                             "episode_number": episode.index,
                             "year": episode.year,
+                            "air_date": air_date,
                             "added_at": episode.addedAt.isoformat(),
                             "summary": episode.summary,
                             "content_rating": getattr(
@@ -208,6 +207,36 @@ class PlexMonitor:
         except Exception as e:
             logger.error(f"Error getting recently added episodes: {e}")
             return []
+
+    def is_first_episode_of_show(
+        self, show_title: str, processed_media: Set[str]
+    ) -> bool:
+        """Check if this is the first episode of this show that we've processed"""
+        if not self.plex:
+            if not self.connect():
+                return False
+
+        try:
+            # Search all TV libraries for this show
+            shows = self.plex.library.search(title=show_title, libtype="show")
+            if not shows:
+                return False
+
+            show = shows[0]
+
+            # Get all episodes of this show
+            episodes = show.episodes()
+
+            # Check if any episodes from this show have been processed
+            for episode in episodes:
+                if episode.key in processed_media:
+                    return False
+
+            # If we get here, no episodes from this show have been processed
+            return True
+        except Exception as e:
+            logger.error(f"Error checking if first episode of show: {e}")
+            return False
 
 
 def load_processed_movies() -> Set[str]:
