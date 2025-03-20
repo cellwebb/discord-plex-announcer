@@ -1,0 +1,24 @@
+version: '3'
+services:
+  plex-discord-bot:
+    container_name: plex-discord-bot
+    image: python:3.10-slim
+    restart: unless-stopped
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - CHANNEL_ID=${CHANNEL_ID}
+      - PLEX_URL=${PLEX_URL}
+      - PLEX_TOKEN=${PLEX_TOKEN}
+      - MOVIE_LIBRARY=${MOVIE_LIBRARY}
+      - TV_LIBRARY=${TV_LIBRARY}
+      - NOTIFY_MOVIES=${NOTIFY_MOVIES}
+      - NOTIFY_TV=${NOTIFY_TV}
+      - CHECK_INTERVAL=${CHECK_INTERVAL}
+      - DATA_FILE=${DATA_FILE}
+    command: >
+      bash -c "pip install --upgrade pip &&
+              pip install -r requirements.txt &&
+              python plex_discord_bot.py"
