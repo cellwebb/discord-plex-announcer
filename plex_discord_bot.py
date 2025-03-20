@@ -43,6 +43,7 @@ TV_LIBRARY = os.getenv("TV_LIBRARY", "TV Shows")
 NOTIFY_MOVIES = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
 NOTIFY_TV = os.getenv("NOTIFY_TV", "true").lower() == "true"
 DATA_FILE = os.getenv("DATA_FILE", "processed_media.json")
+TV_SHOW_BUFFER_FILE = os.getenv("TV_SHOW_BUFFER_FILE", "tv_show_buffer.json")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -283,7 +284,25 @@ async def check_for_new_media():
 
     plex_monitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
 
-    # Check for new movies if enabled
+    # Buffer for TV shows to allow grouping across multiple episodes
+    tv_buffer_time = 2 * 60 * 60  # Group episodes from same show within 2 hours
+    tv_buffer_file = "tv_show_buffer.json"
+    tv_show_buffer = {}
+
+    # Load existing buffer
+    try:
+        if os.path.exists(tv_buffer_file):
+            with open(tv_buffer_file, "r") as f:
+                tv_buffer_data = json.load(f)
+
+                # Convert timestamp strings back to datetime objects
+                for show_title, data in tv_buffer_data.items():
+                    data["last_updated"] = datetime.fromisoformat(data["last_updated"])
+                    tv_show_buffer[show_title] = data
+    except Exception as e:
+        logger.error(f"Error loading TV show buffer: {e}")
+        tv_show_buffer = {}
+
     if NOTIFY_MOVIES:
         logger.info(f"Checking for new movies in library: {MOVIE_LIBRARY}")
         recent_movies = plex_monitor.get_recently_added_movies(MOVIE_LIBRARY, days=1)
@@ -342,70 +361,189 @@ async def check_for_new_media():
         logger.info(f"Checking for new TV episodes in library: {TV_LIBRARY}")
         recent_episodes = plex_monitor.get_recently_added_episodes(TV_LIBRARY, days=1)
 
+        shows_dict = {}
+        filtered_episodes = []
+        shows_to_process = set()
+
         for episode in recent_episodes:
             episode_key = episode["key"]
 
             if episode_key in processed_movies:
                 continue
 
-            logger.info(
-                f"Found new episode: {episode['show_title']} - S{episode['season_number']:02d}E{episode['episode_number']:02d} - {episode['title']}"
+            is_recent_episode = False
+            if episode["air_date"]:
+                thirty_days_ago = datetime.now() - timedelta(days=30)
+                if episode["air_date"] >= thirty_days_ago.date():
+                    is_recent_episode = True
+
+            is_first_show_episode = plex_monitor.is_first_episode_of_show(
+                episode["show_title"], processed_movies
             )
 
-            # Create a nice embed for Discord
-            embed = discord.Embed(
-                title=f"📺 New Episode Available: {episode['show_title']}",
-                description=f"**S{episode['season_number']:02d}E{episode['episode_number']:02d} - {episode['title']}**\n\n{episode['summary'][:2048] if episode['summary'] else 'No summary available.'}",
-                color=0x3498DB,  # Blue color for TV shows
-            )
-
-            # Add episode details
-            if episode["rating"]:
-                embed.add_field(name="Rating", value=f"⭐ {episode['rating']:.1f}/10", inline=True)
-
-            embed.add_field(name="Content Rating", value=episode["content_rating"], inline=True)
-            embed.add_field(
-                name="Duration", value=format_duration(episode["duration"]), inline=True
-            )
-
-            if episode["directors"]:
-                embed.add_field(
-                    name="Director(s)", value=", ".join(episode["directors"]), inline=True
+            if is_recent_episode:
+                logger.info(
+                    f"Episode {episode['show_title']} S{episode['season_number']:02d}E"
+                    + f"{episode['episode_number']:02d} is a recent episode (aired within 30 days)"
+                )
+            if is_first_show_episode:
+                logger.info(
+                    f"Episode {episode['show_title']} S{episode['season_number']:02d}E"
+                    + f"{episode['episode_number']:02d} is the first episode of this show on the server"
                 )
 
-            if episode.get("writers"):
-                embed.add_field(name="Writer(s)", value=", ".join(episode["writers"]), inline=True)
+            if is_recent_episode or is_first_show_episode:
+                show_title = episode["show_title"]
+                shows_to_process.add(show_title)
 
-            if episode["actors"]:
-                embed.add_field(name="Starring", value=", ".join(episode["actors"]), inline=True)
+                # If we already have a buffer for this show, add this episode to it
+                if show_title in tv_show_buffer:
+                    buffer_data = tv_show_buffer[show_title]
+                    buffer_data["episodes"].append(episode)
+                    buffer_data["last_updated"] = datetime.now()
+                else:
+                    # Create a new buffer for this show
+                    tv_show_buffer[show_title] = {
+                        "show_title": show_title,
+                        "show_poster_url": episode["show_poster_url"],
+                        "episodes": [episode],
+                        "last_updated": datetime.now(),
+                        "is_first_show": is_first_show_episode,
+                    }
 
-            # Add the episode thumbnail if available
-            if episode["poster_url"]:
-                embed.set_image(url=episode["poster_url"])
+            # Mark as processed regardless
+            processed_movies.add(episode_key)
 
-            # Add the show poster as thumbnail if available
-            if episode["show_poster_url"]:
-                embed.set_thumbnail(url=episode["show_poster_url"])
+        # Save the TV show buffer
+        buffer_to_save = {}
+        for show_title, data in tv_show_buffer.items():
+            # Convert datetime to string for JSON serialization
+            buffer_copy = data.copy()
+            buffer_copy["last_updated"] = buffer_copy["last_updated"].isoformat()
+            buffer_to_save[show_title] = buffer_copy
 
-            # Add timestamp
+        try:
+            with open(tv_buffer_file, "w") as f:
+                json.dump(buffer_to_save, f)
+        except Exception as e:
+            logger.error(f"Error saving TV show buffer: {e}")
+
+        # Check for shows that haven't been updated in a while and should be sent
+        current_time = datetime.now()
+        shows_to_send = []
+
+        for show_title, data in list(tv_show_buffer.items()):
+            time_since_update = (current_time - data["last_updated"]).total_seconds()
+
+            # Send notification if:
+            # 1. Buffer time has passed since last update, or
+            # 2. We processed an episode for this show in this run and buffer time passed since first episode
+            if (time_since_update >= tv_buffer_time) or (show_title in shows_to_process):
+                shows_to_send.append(show_title)
+
+        # Send notifications for shows that are ready
+        for show_title in shows_to_send:
+            show_data = tv_show_buffer[show_title]
+            episodes = show_data["episodes"]
+
+            if not episodes:
+                continue
+
+            logger.info(f"Sending notification for {len(episodes)} episode(s) of {show_title}")
+
+            embed_title = f"📺 New Episodes Available: {show_title}"
+
+            if show_data.get("is_first_show", False):
+                embed_title = f"📺 NEW SHOW: {show_title}"
+                embed_color = 0x9B59B6
+            else:
+                embed_color = 0x3498DB
+
+            embed = discord.Embed(
+                title=embed_title,
+                description=f"{len(episodes)} new episode(s) added to Plex.",
+                color=embed_color,
+            )
+
+            episode_list = ""
+            for episode in episodes:
+                episode_entry = f"• S{episode['season_number']:02d}E{episode['episode_number']:02d} - {episode['title']}"
+
+                if episode["air_date"]:
+                    thirty_days_ago = datetime.now() - timedelta(days=30)
+                    if episode["air_date"] >= thirty_days_ago.date():
+                        episode_entry += " 📡 *Recently Aired*"
+
+                episode_list += episode_entry + "\n"
+
+            embed.add_field(name="Episodes", value=episode_list, inline=False)
+
+            if len(episodes) == 1:
+                episode = episodes[0]
+                if episode["summary"]:
+                    embed.description = episode["summary"][:2048]
+
+                if episode["rating"]:
+                    embed.add_field(
+                        name="Rating", value=f"⭐ {episode['rating']:.1f}/10", inline=True
+                    )
+
+                embed.add_field(name="Content Rating", value=episode["content_rating"], inline=True)
+                embed.add_field(
+                    name="Duration", value=format_duration(episode["duration"]), inline=True
+                )
+
+                if episode.get("directors"):
+                    embed.add_field(
+                        name="Director(s)", value=", ".join(episode["directors"]), inline=True
+                    )
+
+                if episode.get("writers"):
+                    embed.add_field(
+                        name="Writer(s)", value=", ".join(episode["writers"]), inline=True
+                    )
+
+                if episode["actors"]:
+                    embed.add_field(
+                        name="Starring", value=", ".join(episode["actors"]), inline=True
+                    )
+
+                if episode["poster_url"]:
+                    embed.set_image(url=episode["poster_url"])
+
+            if show_data["show_poster_url"]:
+                embed.set_thumbnail(url=show_data["show_poster_url"])
+
             embed.timestamp = datetime.now()
             embed.set_footer(text="Added to Plex")
 
-            # Send the message
             try:
                 await channel.send(embed=embed)
                 logger.info(
-                    f"Sent notification for episode: {episode['show_title']} S{episode['season_number']:02d}E{episode['episode_number']:02d}"
+                    f"Sent notification for show: {show_title} with {len(episodes)} episode(s)"
                 )
 
-                # Add to processed movies
-                processed_movies.add(episode_key)
-                save_processed_movies(processed_movies)
+                # Remove from buffer after sending
+                del tv_show_buffer[show_title]
 
-                # Sleep briefly to avoid rate limiting
                 time.sleep(1)
             except Exception as e:
                 logger.error(f"Error sending episode notification: {e}")
+
+        # Save the TV show buffer again after processing
+        buffer_to_save = {}
+        for show_title, data in tv_show_buffer.items():
+            buffer_copy = data.copy()
+            buffer_copy["last_updated"] = buffer_copy["last_updated"].isoformat()
+            buffer_to_save[show_title] = buffer_copy
+
+        try:
+            with open(tv_buffer_file, "w") as f:
+                json.dump(buffer_to_save, f)
+        except Exception as e:
+            logger.error(f"Error saving TV show buffer after processing: {e}")
+
+        save_processed_movies(processed_movies)
 
 
 @bot.command(name="checkplex")
