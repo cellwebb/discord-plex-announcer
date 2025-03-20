@@ -19,7 +19,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set
 
 import discord
 from discord.ext import commands, tasks
@@ -90,10 +90,10 @@ class PlexMonitor:
                 return True
             except Unauthorized as e:
                 logger.error(f"Authentication failed for Plex server: {e}")
-                return False  # No point in retrying auth failures
+                return False
             except (ConnectionError, TimeoutError) as e:
                 retry_count += 1
-                wait_time = 2**retry_count  # Exponential backoff
+                wait_time = 2**retry_count
                 logger.warning(
                     f"Connection to Plex failed (attempt {retry_count}/{max_retries}): {e}"
                 )
@@ -136,9 +136,7 @@ class PlexMonitor:
                 return []
 
             cutoff_date: datetime = datetime.now() - timedelta(days=days)
-            recent_movies: List[Movie] = cast(
-                List[Movie], library.search(libtype="movie", sort="addedAt:desc")
-            )
+            recent_movies: List[Movie] = library.search(libtype="movie", sort="addedAt:desc")
 
             new_movies: List[Dict[str, Any]] = []
             for movie in recent_movies:
@@ -186,9 +184,7 @@ class PlexMonitor:
                 return []
 
             cutoff_date: datetime = datetime.now() - timedelta(days=days)
-            recent_episodes: List[Episode] = cast(
-                List[Episode], library.searchEpisodes(sort="addedAt:desc")
-            )
+            recent_episodes: List[Episode] = library.searchEpisodes(sort="addedAt:desc")
 
             new_episodes: List[Dict[str, Any]] = []
             for episode in recent_episodes:
@@ -246,9 +242,7 @@ class PlexMonitor:
                 return False
 
         try:
-            shows: List[Show] = cast(
-                List[Show], self.plex.library.search(title=show_title, libtype="show")
-            )
+            shows: List[Show] = self.plex.library.search(title=show_title, libtype="show")
             if not shows:
                 return False
 
@@ -285,15 +279,13 @@ def load_tv_buffer() -> Dict[str, Dict[str, Any]]:
 def save_tv_buffer(buffer: Dict[str, Dict[str, Any]]) -> bool:
     """Save TV show buffer to disk."""
     buffer_file = TV_SHOW_BUFFER_FILE
-    # Prepare buffer for JSON serialization (convert datetime to string)
-    buffer_to_save: Dict[str, Dict[str, Any]] = {}
-    for show_title, data in buffer.items():
-        buffer_copy = data.copy()
-        if isinstance(buffer_copy.get("last_updated"), datetime):
-            buffer_copy["last_updated"] = buffer_copy["last_updated"].isoformat()
-        buffer_to_save[show_title] = buffer_copy
-
     try:
+        buffer_to_save = {}
+        for show_title, data in buffer.items():
+            buffer_to_save[show_title] = data.copy()
+            if isinstance(data.get("last_updated"), datetime):
+                buffer_to_save[show_title]["last_updated"] = data["last_updated"].isoformat()
+
         with open(buffer_file, "w") as f:
             json.dump(buffer_to_save, f)
         return True
@@ -365,10 +357,7 @@ async def check_for_new_media() -> None:
 
     plex_monitor: PlexMonitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
 
-    # Buffer for TV shows to allow grouping across multiple episodes
-    tv_buffer_time: int = (
-        TV_BUFFER_TIME  # Group episodes from same show within TV_BUFFER_TIME seconds
-    )
+    tv_buffer_time: int = TV_BUFFER_TIME
     tv_buffer: Dict[str, Dict[str, Any]] = load_tv_buffer()
 
     if NOTIFY_MOVIES:
@@ -472,7 +461,6 @@ async def check_for_new_media() -> None:
                     buffer_data["episodes"].append(episode)
                     buffer_data["last_updated"] = datetime.now()
                 else:
-                    # Create a new buffer for this show
                     tv_buffer[show_title] = {
                         "show_title": show_title,
                         "show_poster_url": episode["show_poster_url"],
@@ -481,10 +469,8 @@ async def check_for_new_media() -> None:
                         "is_first_show": is_first_show_episode,
                     }
 
-            # Mark as processed regardless
             processed_movies.add(episode_key)
 
-        # Save the TV show buffer
         save_tv_buffer(tv_buffer)
 
         # Check for shows that haven't been updated in a while and should be sent
@@ -494,9 +480,6 @@ async def check_for_new_media() -> None:
         for show_title, data in list(tv_buffer.items()):
             time_since_update: float = (current_time - data["last_updated"]).total_seconds()
 
-            # Send notification if:
-            # 1. Buffer time has passed since last update, or
-            # 2. We processed an episode for this show in this run and buffer time passed since first episode  # noqa: E501
             if (time_since_update >= tv_buffer_time) or (show_title in shows_to_process):
                 shows_to_send.append(show_title)
 
@@ -591,14 +574,12 @@ async def check_for_new_media() -> None:
                     f"Sent notification for show: {show_title} with {len(episodes)} episode(s)"
                 )
 
-                # Remove from buffer after sending
                 del tv_buffer[show_title]
 
                 time.sleep(1)
             except Exception as e:
-                logger.error(f"Error sending episode notification: {e}")
+                logger.error(f"Error sending TV show notification: {e}")
 
-        # Save the TV show buffer again after processing
         save_tv_buffer(tv_buffer)
 
         save_processed_movies(processed_movies)
@@ -643,13 +624,12 @@ async def status(ctx: commands.Context) -> None:
     embed.add_field(name="Check Interval", value=f"{CHECK_INTERVAL} seconds", inline=True)
     embed.add_field(name="Processed Media", value=str(len(processed_movies)), inline=True)
 
-    # Add last check timestamp
     uptime = time.time() - START_TIME
     days, remainder = divmod(uptime, 86400)
     hours, remainder = divmod(remainder, 3600)
     minutes, seconds = divmod(remainder, 60)
     embed.add_field(
-        name="Uptime",
+        name="Bot Uptime",
         value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s",
         inline=True,
     )
@@ -660,27 +640,35 @@ async def status(ctx: commands.Context) -> None:
 
 @bot.command(name="healthcheck")
 async def healthcheck(ctx: commands.Context) -> None:
-    """Health check command to verify bot is running properly."""
-    # Check Plex connectivity
-    plex_monitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
-    plex_status = "✅ Connected" if plex_monitor.connect() else "❌ Disconnected"
+    """Check if the bot can connect to Plex and Discord."""
+    embed = discord.Embed(
+        title="Health Check",
+        description="Checking connections to Plex and Discord...",
+        color=0xFFFF00,
+    )
+    message = await ctx.send(embed=embed)
 
-    # Check Discord channel connectivity
-    channel = bot.get_channel(CHANNEL_ID)
-    channel_status = "✅ Connected" if channel else "❌ Disconnected"
+    plex_ok = False
+    if PLEX_TOKEN:
+        plex_monitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
+        plex_ok = plex_monitor.plex is not None
+
+    channel_ok = bot.get_channel(CHANNEL_ID) is not None
 
     embed = discord.Embed(
         title="Health Check",
         description="System health status",
-        color=(
-            0x00FF00
-            if plex_status.startswith("✅") and channel_status.startswith("✅")
-            else 0xFF0000
-        ),
+        color=(0x00FF00 if plex_ok and channel_ok else 0xFF0000),
     )
 
-    embed.add_field(name="Plex Server", value=plex_status, inline=True)
-    embed.add_field(name="Discord Channel", value=channel_status, inline=True)
+    embed.add_field(
+        name="Plex Server", value="✅ Connected" if plex_ok else "❌ Disconnected", inline=True
+    )
+    embed.add_field(
+        name="Discord Channel",
+        value="✅ Connected" if channel_ok else "❌ Disconnected",
+        inline=True,
+    )
     embed.add_field(
         name="Data File",
         value=(
@@ -714,10 +702,11 @@ def main() -> None:
     and starting the Discord bot.
     """
     global processed_movies, DISCORD_TOKEN, CHANNEL_ID, PLEX_URL, PLEX_TOKEN, CHECK_INTERVAL
-    global MOVIE_LIBRARY, TV_LIBRARY, NOTIFY_MOVIES, NOTIFY_TV, DATA_FILE
+    global MOVIE_LIBRARY, TV_LIBRARY, NOTIFY_MOVIES, NOTIFY_TV, DATA_FILE, TV_SHOW_BUFFER_FILE
+    global TV_BUFFER_TIME, PLEX_CONNECT_RETRY
 
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        description="Plex Discord Bot - Notifications for new movies and TV episodes"
+    parser = argparse.ArgumentParser(
+        description="Plex Discord Bot - Send notifications for new movies and TV episodes"
     )
     parser.add_argument("--token", help="Discord bot token")
     parser.add_argument("--channel", type=int, help="Discord channel ID")
@@ -737,10 +726,12 @@ def main() -> None:
         help="Enable/disable TV show notifications",
     )
     parser.add_argument("--data-file", help="File to store processed media")
+    parser.add_argument("--buffer-file", help="File to store TV show buffer")
+    parser.add_argument("--buffer-time", type=int, help="Time to buffer TV episodes")
+    parser.add_argument("--retry", type=int, help="Number of retries for Plex connection")
 
-    args: argparse.Namespace = parser.parse_args()
+    args = parser.parse_args()
 
-    # Override environment variables with command line arguments if provided
     if args.token:
         DISCORD_TOKEN = args.token
     if args.channel:
@@ -761,8 +752,13 @@ def main() -> None:
         NOTIFY_TV = args.notify_tv.lower() == "true"
     if args.data_file:
         DATA_FILE = args.data_file
+    if args.buffer_file:
+        TV_SHOW_BUFFER_FILE = args.buffer_file
+    if args.buffer_time:
+        TV_BUFFER_TIME = args.buffer_time
+    if args.retry:
+        PLEX_CONNECT_RETRY = args.retry
 
-    # Validate required settings
     if not DISCORD_TOKEN:
         logger.error(
             "Discord token is required. Set DISCORD_TOKEN environment variable or use --token"
