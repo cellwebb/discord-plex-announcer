@@ -19,6 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger("plex_discord_bot")
 
 load_dotenv()
+
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))
 PLEX_URL = os.getenv("PLEX_URL", "http://localhost:32400")
@@ -85,7 +86,6 @@ class PlexMonitor:
             new_movies = []
             for movie in recent_movies:
                 if movie.addedAt > cutoff_date:
-                    # Convert to dictionary for easier processing
                     poster_url = None
                     if movie.thumb:
                         poster_url = f"{self.plex_url}{movie.thumb}?X-Plex-Token={self.plex_token}"
@@ -98,22 +98,15 @@ class PlexMonitor:
                             "year": movie.year,
                             "added_at": movie.addedAt.isoformat(),
                             "summary": movie.summary,
-                            "content_rating": getattr(
-                                movie, "contentRating", "Not Rated"
-                            ),
+                            "content_rating": getattr(movie, "contentRating", "Not Rated"),
                             "rating": getattr(movie, "rating", None),
                             "poster_url": poster_url,
                             "duration": movie.duration,
-                            "genres": [
-                                genre.tag for genre in getattr(movie, "genres", [])
-                            ],
+                            "genres": [genre.tag for genre in getattr(movie, "genres", [])],
                             "directors": [
-                                director.tag
-                                for director in getattr(movie, "directors", [])
+                                director.tag for director in getattr(movie, "directors", [])
                             ],
-                            "actors": [
-                                actor.tag for actor in getattr(movie, "roles", [])
-                            ][
+                            "actors": [actor.tag for actor in getattr(movie, "roles", [])][
                                 :3
                             ],  # Limit to top 3 actors
                         }
@@ -127,9 +120,7 @@ class PlexMonitor:
             logger.error(f"Error getting recently added movies: {e}")
             return []
 
-    def get_recently_added_episodes(
-        self, library_name: str, days: int = 1
-    ) -> List[Dict]:
+    def get_recently_added_episodes(self, library_name: str, days: int = 1) -> List[Dict]:
         """Get recently added TV episodes from the Plex library"""
         if not self.plex:
             if not self.connect():
@@ -151,7 +142,9 @@ class PlexMonitor:
                     # Convert to dictionary for easier processing
                     poster_url = None
                     if episode.thumb:
-                        poster_url = f"{self.plex_url}{episode.thumb}?X-Plex-Token={self.plex_token}"
+                        poster_url = (
+                            f"{self.plex_url}{episode.thumb}?X-Plex-Token={self.plex_token}"
+                        )
 
                     show_poster_url = None
                     if episode.grandparentThumb:
@@ -159,10 +152,7 @@ class PlexMonitor:
 
                     # Get original air date if available
                     air_date = None
-                    if (
-                        hasattr(episode, "originallyAvailableAt")
-                        and episode.originallyAvailableAt
-                    ):
+                    if hasattr(episode, "originallyAvailableAt") and episode.originallyAvailableAt:
                         air_date = episode.originallyAvailableAt
 
                     # Episode data
@@ -178,23 +168,16 @@ class PlexMonitor:
                             "air_date": air_date,
                             "added_at": episode.addedAt.isoformat(),
                             "summary": episode.summary,
-                            "content_rating": getattr(
-                                episode, "contentRating", "Not Rated"
-                            ),
+                            "content_rating": getattr(episode, "contentRating", "Not Rated"),
                             "rating": getattr(episode, "audienceRating", None),
                             "poster_url": poster_url,
                             "show_poster_url": show_poster_url,
                             "duration": episode.duration,
                             "directors": [
-                                director.tag
-                                for director in getattr(episode, "directors", [])
+                                director.tag for director in getattr(episode, "directors", [])
                             ],
-                            "writers": [
-                                writer.tag for writer in getattr(episode, "writers", [])
-                            ],
-                            "actors": [
-                                actor.tag for actor in getattr(episode, "roles", [])
-                            ][
+                            "writers": [writer.tag for writer in getattr(episode, "writers", [])],
+                            "actors": [actor.tag for actor in getattr(episode, "roles", [])][
                                 :3
                             ],  # Limit to top 3 actors
                         }
@@ -208,9 +191,7 @@ class PlexMonitor:
             logger.error(f"Error getting recently added episodes: {e}")
             return []
 
-    def is_first_episode_of_show(
-        self, show_title: str, processed_media: Set[str]
-    ) -> bool:
+    def is_first_episode_of_show(self, show_title: str, processed_media: Set[str]) -> bool:
         """Check if this is the first episode of this show that we've processed"""
         if not self.plex:
             if not self.connect():
@@ -308,30 +289,20 @@ async def check_for_new_media():
             embed = discord.Embed(
                 title=f"🎬 New Movie Available: {movie['title']} ({movie['year']})",
                 description=(
-                    movie["summary"][:2048]
-                    if movie["summary"]
-                    else "No summary available."
+                    movie["summary"][:2048] if movie["summary"] else "No summary available."
                 ),
                 color=0x00FF00,
             )
 
             # Add movie details
             if movie["rating"]:
-                embed.add_field(
-                    name="Rating", value=f"⭐ {movie['rating']:.1f}/10", inline=True
-                )
+                embed.add_field(name="Rating", value=f"⭐ {movie['rating']:.1f}/10", inline=True)
 
-            embed.add_field(
-                name="Content Rating", value=movie["content_rating"], inline=True
-            )
-            embed.add_field(
-                name="Duration", value=format_duration(movie["duration"]), inline=True
-            )
+            embed.add_field(name="Content Rating", value=movie["content_rating"], inline=True)
+            embed.add_field(name="Duration", value=format_duration(movie["duration"]), inline=True)
 
             if movie["genres"]:
-                embed.add_field(
-                    name="Genres", value=", ".join(movie["genres"]), inline=True
-                )
+                embed.add_field(name="Genres", value=", ".join(movie["genres"]), inline=True)
 
             if movie["directors"]:
                 embed.add_field(
@@ -339,9 +310,7 @@ async def check_for_new_media():
                 )
 
             if movie["actors"]:
-                embed.add_field(
-                    name="Starring", value=", ".join(movie["actors"]), inline=True
-                )
+                embed.add_field(name="Starring", value=", ".join(movie["actors"]), inline=True)
 
             # Add the poster as thumbnail if available
             if movie["poster_url"]:
@@ -390,33 +359,23 @@ async def check_for_new_media():
 
             # Add episode details
             if episode["rating"]:
-                embed.add_field(
-                    name="Rating", value=f"⭐ {episode['rating']:.1f}/10", inline=True
-                )
+                embed.add_field(name="Rating", value=f"⭐ {episode['rating']:.1f}/10", inline=True)
 
-            embed.add_field(
-                name="Content Rating", value=episode["content_rating"], inline=True
-            )
+            embed.add_field(name="Content Rating", value=episode["content_rating"], inline=True)
             embed.add_field(
                 name="Duration", value=format_duration(episode["duration"]), inline=True
             )
 
             if episode["directors"]:
                 embed.add_field(
-                    name="Director(s)",
-                    value=", ".join(episode["directors"]),
-                    inline=True,
+                    name="Director(s)", value=", ".join(episode["directors"]), inline=True
                 )
 
             if episode.get("writers"):
-                embed.add_field(
-                    name="Writer(s)", value=", ".join(episode["writers"]), inline=True
-                )
+                embed.add_field(name="Writer(s)", value=", ".join(episode["writers"]), inline=True)
 
             if episode["actors"]:
-                embed.add_field(
-                    name="Starring", value=", ".join(episode["actors"]), inline=True
-                )
+                embed.add_field(name="Starring", value=", ".join(episode["actors"]), inline=True)
 
             # Add the episode thumbnail if available
             if episode["poster_url"]:
@@ -478,12 +437,8 @@ async def status(ctx):
     else:
         embed.add_field(name="TV Notifications", value="Disabled", inline=True)
 
-    embed.add_field(
-        name="Check Interval", value=f"{CHECK_INTERVAL} seconds", inline=True
-    )
-    embed.add_field(
-        name="Processed Media", value=str(len(processed_movies)), inline=True
-    )
+    embed.add_field(name="Check Interval", value=f"{CHECK_INTERVAL} seconds", inline=True)
+    embed.add_field(name="Processed Media", value=str(len(processed_movies)), inline=True)
 
     embed.timestamp = datetime.now()
     await ctx.send(embed=embed)
@@ -506,14 +461,10 @@ def main():
     parser.add_argument("--movie-library", help="Plex movie library name")
     parser.add_argument("--tv-library", help="Plex TV show library name")
     parser.add_argument(
-        "--notify-movies",
-        choices=["true", "false"],
-        help="Enable/disable movie notifications",
+        "--notify-movies", choices=["true", "false"], help="Enable/disable movie notifications"
     )
     parser.add_argument(
-        "--notify-tv",
-        choices=["true", "false"],
-        help="Enable/disable TV show notifications",
+        "--notify-tv", choices=["true", "false"], help="Enable/disable TV show notifications"
     )
     parser.add_argument("--data-file", help="File to store processed media")
 
@@ -561,18 +512,12 @@ def main():
         return
 
     if not NOTIFY_MOVIES and not NOTIFY_TV:
-        logger.error(
-            "Both movie and TV notifications are disabled. Enable at least one."
-        )
+        logger.error("Both movie and TV notifications are disabled. Enable at least one.")
         return
 
-    # Load processed media from file
     processed_movies = load_processed_movies()
-    logger.info(
-        f"Loaded {len(processed_movies)} processed media items from {DATA_FILE}"
-    )
+    logger.info(f"Loaded {len(processed_movies)} processed media items from {DATA_FILE}")
 
-    # Log configuration
     logger.info(f"Monitoring Plex server at {PLEX_URL}")
     if NOTIFY_MOVIES:
         logger.info(f"Movie notifications enabled for library: {MOVIE_LIBRARY}")
@@ -584,7 +529,6 @@ def main():
     else:
         logger.info("TV show notifications disabled")
 
-    # Start the bot
     logger.info("Starting bot...")
     try:
         bot.run(DISCORD_TOKEN)
