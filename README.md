@@ -1,94 +1,67 @@
-# Discord Plex Announcer
+# Plex Discord Bot
 
-A Discord bot that announces when new movies are added to your Plex server.
+A Discord bot that notifies your server when new movies and TV shows are added to your Plex library.
 
 ## Features
 
-- Monitors your Plex server for newly added movies
-- Posts announcements to a designated Discord channel
-- Includes movie details such as title, summary, year, rating, and genres
-- Admin commands to check status and trigger manual checks
+- 🎬 Posts notifications to a Discord channel when new movies are added to Plex
+- 📺 Sends alerts for new TV show episodes
+- 📊 Includes media details like rating, genres, directors, and actors
+- 🖼️ Displays movie/episode poster thumbnails in notifications
+- ⏱️ Customizable check interval
+- 💾 Keeps track of processed media to avoid duplicate notifications
+- 🤖 Simple commands for manual checks and status updates
 
-## Setup
+## Requirements
 
-### Prerequisites
+- Python 3.8+
+- Discord Bot Token
+- Plex Media Server with API access
+- Discord server with a channel for notifications
 
-- Python 3.8 or higher
-- A Plex server with an authentication token
-- A Discord bot token
+## Quick Start
 
-### Installation
+1. Clone this repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Copy `.env.example` to `.env` and fill in your configuration
+4. Run the bot: `python plex_discord_bot.py`
 
-1. Clone this repository:
+For detailed setup instructions, see [SETUP.md](SETUP.md).
 
-   ```bash
-   git clone https://github.com/yourusername/discord-plex-announcer.git
-   cd discord-plex-announcer
-   ```
+## Configuration
 
-2. Set up a virtual environment:
+Configuration can be done via environment variables or command line arguments:
 
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
-   ```
+| Environment Variable | Command Line Argument | Description                                                   |
+| -------------------- | --------------------- | ------------------------------------------------------------- |
+| `DISCORD_TOKEN`      | `--token`             | Discord bot token                                             |
+| `CHANNEL_ID`         | `--channel`           | Discord channel ID for notifications                          |
+| `PLEX_URL`           | `--plex-url`          | URL of your Plex server (default: http://localhost:32400)     |
+| `PLEX_TOKEN`         | `--plex-token`        | Plex authentication token                                     |
+| `MOVIE_LIBRARY`      | `--movie-library`     | Name of the Plex movie library (default: Movies)              |
+| `TV_LIBRARY`         | `--tv-library`        | Name of the Plex TV show library (default: TV Shows)          |
+| `NOTIFY_MOVIES`      | `--notify-movies`     | Enable/disable movie notifications (default: true)            |
+| `NOTIFY_TV`          | `--notify-tv`         | Enable/disable TV show notifications (default: true)          |
+| `CHECK_INTERVAL`     | `--interval`          | Check interval in seconds (default: 300)                      |
+| `DATA_FILE`          | `--data-file`         | File to store processed media (default: processed_media.json) |
 
-3. Install dependencies:
+## Docker Deployment
 
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Create a `.env` file based on the `.env.example` template:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-5. Edit the `.env` file with your Discord bot token, channel ID, and Plex server details.
-
-### Getting Your Plex Token
-
-To get your Plex token, you can:
-
-1. Log into Plex web app
-2. Open your browser's developer tools and look at the network tab
-3. Find a request to your Plex server and look for the `X-Plex-Token` parameter in the URL
-
-### Testing Connections
-
-Before running the bot, you can verify your Discord and Plex connections with the testing script:
+You can run the bot using Docker Compose:
 
 ```bash
-python test_connection.py
+docker-compose -f plex-discord-bot-compose.yml up -d
 ```
 
-This will check if:
+## Commands
 
-- Your Discord token is valid
-- The specified Discord channel is accessible
-- Your Plex server is reachable
-- The Movies library exists and can be queried
-
-If any issues are detected, the script will provide guidance on how to fix them.
-
-### Running the Bot
-
-```bash
-python main.py
-```
-
-Consider using a process manager like `systemd`, `supervisor`, or `pm2` to keep the bot running.
-
-## Usage
-
-The bot automatically checks for new movies at regular intervals (default: every 5 minutes).
-
-### Commands
-
-- `!status` - Shows the current status of the bot and Plex connection
-- `!check_now` - Manually triggers a check for new movies (admin only)
+- `!checkplex` - Force a check for new media
+- `!status` - Display bot status and configuration
 
 ## License
 
-See the [LICENSE](LICENSE) file for details.
+MIT
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
