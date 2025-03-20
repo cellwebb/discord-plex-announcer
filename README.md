@@ -36,7 +36,7 @@ Configuration can be done via environment variables or command line arguments:
 | -------------------- | --------------------- | ------------------------------------------------------------- |
 | `DISCORD_TOKEN`      | `--token`             | Discord bot token                                             |
 | `CHANNEL_ID`         | `--channel`           | Discord channel ID for notifications                          |
-| `PLEX_URL`           | `--plex-url`          | URL of your Plex server (default: http://localhost:32400)     |
+| `PLEX_URL`           | `--plex-url`          | URL of your Plex server (default: `http://localhost:32400`)   |
 | `PLEX_TOKEN`         | `--plex-token`        | Plex authentication token                                     |
 | `MOVIE_LIBRARY`      | `--movie-library`     | Name of the Plex movie library (default: Movies)              |
 | `TV_LIBRARY`         | `--tv-library`        | Name of the Plex TV show library (default: TV Shows)          |
@@ -50,7 +50,7 @@ Configuration can be done via environment variables or command line arguments:
 You can run the bot using Docker Compose:
 
 ```bash
-docker-compose -f plex-discord-bot-compose.yml up -d
+docker-compose up -d
 ```
 
 ## Commands
