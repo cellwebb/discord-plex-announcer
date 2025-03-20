@@ -655,12 +655,8 @@ async def healthcheck(ctx: commands.Context) -> None:
 
     channel_ok = bot.get_channel(CHANNEL_ID) is not None
 
-    embed = discord.Embed(
-        title="Health Check",
-        description="System health status",
-        color=(0x00FF00 if plex_ok and channel_ok else 0xFF0000),
-    )
-
+    embed.description = "System health status"
+    embed.color = 0x00FF00 if plex_ok and channel_ok else 0xFF0000
     embed.add_field(
         name="Plex Server", value="✅ Connected" if plex_ok else "❌ Disconnected", inline=True
     )
@@ -680,7 +676,7 @@ async def healthcheck(ctx: commands.Context) -> None:
     )
 
     embed.timestamp = datetime.now()
-    await ctx.send(embed=embed)
+    await message.edit(embed=embed)
 
 
 def signal_handler(sig, frame):
