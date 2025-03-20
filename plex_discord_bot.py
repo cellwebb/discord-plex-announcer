@@ -1,7 +1,7 @@
 """
 Plex Discord Bot - Send notifications to Discord when new media is added to Plex.
 
-This bot monitors Plex libraries for new movies and TV shows, then sends formatted 
+This bot monitors Plex libraries for new movies and TV shows, then sends formatted
 notifications to a Discord channel. It features:
 - Notifications for all new movies
 - Selective notifications for TV shows (recently aired or first episodes of new shows)
@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Set, cast
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-from plexapi.exceptions import BadRequest, NotFound, Unauthorized
+from plexapi.exceptions import NotFound, Unauthorized
 from plexapi.library import LibrarySection
 from plexapi.server import PlexServer
 from plexapi.video import Episode, Movie, Show
@@ -201,7 +201,7 @@ class PlexMonitor:
 
                     show_poster_url: Optional[str] = None
                     if episode.grandparentThumb:
-                        show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"
+                        show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"  # noqa: E501
 
                     air_date: Optional[datetime] = None
                     if hasattr(episode, "originallyAvailableAt") and episode.originallyAvailableAt:
@@ -272,8 +272,6 @@ def load_tv_buffer() -> Dict[str, Dict[str, Any]]:
         if os.path.exists(buffer_file):
             with open(buffer_file, "r") as f:
                 tv_buffer_data: Dict[str, Dict[str, Any]] = json.load(f)
-
-                # Convert timestamp strings back to datetime objects
                 for show_title, data in tv_buffer_data.items():
                     if isinstance(data.get("last_updated"), str):
                         data["last_updated"] = datetime.fromisoformat(data["last_updated"])
@@ -461,7 +459,7 @@ async def check_for_new_media() -> None:
             if is_first_show_episode:
                 logger.info(
                     f"Episode {episode['show_title']} S{episode['season_number']:02d}E"
-                    + f"{episode['episode_number']:02d} is the first episode of this show on the server"
+                    + f"{episode['episode_number']:02d} is the first episode of this show on the server"  # noqa: E501
                 )
 
             if is_recent_episode or is_first_show_episode:
@@ -498,7 +496,7 @@ async def check_for_new_media() -> None:
 
             # Send notification if:
             # 1. Buffer time has passed since last update, or
-            # 2. We processed an episode for this show in this run and buffer time passed since first episode
+            # 2. We processed an episode for this show in this run and buffer time passed since first episode  # noqa: E501
             if (time_since_update >= tv_buffer_time) or (show_title in shows_to_process):
                 shows_to_send.append(show_title)
 
@@ -528,7 +526,7 @@ async def check_for_new_media() -> None:
             episode_list: str = ""
             for episode in episodes:
                 episode_entry: str = (
-                    f"• S{episode['season_number']:02d}E{episode['episode_number']:02d} - {episode['title']}"
+                    f"• S{episode['season_number']:02d}E{episode['episode_number']:02d} - {episode['title']}"  # noqa: E501
                 )
 
                 if episode["air_date"]:
