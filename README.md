@@ -4,13 +4,13 @@ A Discord bot that notifies your server when new movies and TV shows are added t
 
 ## Features
 
-- 🎬 Posts notifications to a Discord channel when new movies are added to Plex
-- 📺 Sends alerts for new TV show episodes
-- 📊 Includes media details like rating, genres, directors, and actors
-- 🖼️ Displays movie/episode poster thumbnails in notifications
-- ⏱️ Customizable check interval
-- 💾 Keeps track of processed media to avoid duplicate notifications
-- 🤖 Simple commands for manual checks and status updates
+- Posts notifications to a Discord channel when new movies are added to Plex
+- Sends alerts for new TV show episodes
+- Includes media details like rating, genres, directors, and actors
+- Displays movie/episode poster thumbnails in notifications
+- Customizable check interval
+- Keeps track of processed media to avoid duplicate notifications
+- Simple commands for manual checks and status updates
 
 ## Requirements
 
@@ -57,6 +57,15 @@ docker-compose up -d
 
 - `!checkplex` - Force a check for new media
 - `!status` - Display bot status and configuration
+- `!healthcheck` - Verify connectivity to Plex and Discord
+
+## Testing
+
+Basic unit tests are included. To run tests:
+
+```bash
+python -m unittest test_plex_bot.py
+```
 
 ## License
 

@@ -15,6 +15,8 @@ import argparse
 import json
 import logging
 import os
+import signal
+import sys
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, cast
@@ -22,18 +24,22 @@ from typing import Any, Dict, List, Optional, Set, cast
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
+from plexapi.exceptions import BadRequest, NotFound, Unauthorized
 from plexapi.library import LibrarySection
 from plexapi.server import PlexServer
 from plexapi.video import Episode, Movie, Show
 
+# Configure logging
+load_dotenv()
+LOGGING_LEVEL = os.getenv("LOGGING_LEVEL", "INFO")
+numeric_level = getattr(logging, LOGGING_LEVEL.upper(), logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=numeric_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler("plex_discord_bot.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger("plex_discord_bot")
-
-load_dotenv()
 
 DISCORD_TOKEN: Optional[str] = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID: int = int(os.getenv("CHANNEL_ID", "0"))
@@ -46,12 +52,15 @@ NOTIFY_MOVIES: bool = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
 NOTIFY_TV: bool = os.getenv("NOTIFY_TV", "true").lower() == "true"
 DATA_FILE: str = os.getenv("DATA_FILE", "processed_media.json")
 TV_SHOW_BUFFER_FILE: str = os.getenv("TV_SHOW_BUFFER_FILE", "tv_show_buffer.json")
+TV_BUFFER_TIME: int = int(os.getenv("TV_BUFFER_TIME", "7200"))  # 2 hours by default
+PLEX_CONNECT_RETRY: int = int(os.getenv("PLEX_CONNECT_RETRY", "3"))
 
 intents: discord.Intents = discord.Intents.default()
 intents.message_content = True
 bot: commands.Bot = commands.Bot(command_prefix="!", intents=intents)
 
 processed_movies: Set[str] = set()
+START_TIME: float = time.time()
 
 
 class PlexMonitor:
@@ -71,13 +80,32 @@ class PlexMonitor:
 
     def connect(self) -> bool:
         """Establish connection to the Plex server."""
-        try:
-            self.plex = PlexServer(self.plex_url, self.plex_token)
-            logger.info(f"Connected to Plex server at {self.plex_url}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to connect to Plex: {e}")
-            return False
+        retry_count = 0
+        max_retries = PLEX_CONNECT_RETRY
+
+        while retry_count < max_retries:
+            try:
+                self.plex = PlexServer(self.plex_url, self.plex_token)
+                logger.info(f"Connected to Plex server at {self.plex_url}")
+                return True
+            except Unauthorized as e:
+                logger.error(f"Authentication failed for Plex server: {e}")
+                return False  # No point in retrying auth failures
+            except (ConnectionError, TimeoutError) as e:
+                retry_count += 1
+                wait_time = 2**retry_count  # Exponential backoff
+                logger.warning(
+                    f"Connection to Plex failed (attempt {retry_count}/{max_retries}): {e}"
+                )
+                if retry_count < max_retries:
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+            except Exception as e:
+                logger.error(f"Failed to connect to Plex: {e}")
+                return False
+
+        logger.error(f"Failed to connect to Plex after {max_retries} attempts")
+        return False
 
     def get_library(self, library_name: str) -> Optional[LibrarySection]:
         """Get a specific library section from Plex."""
@@ -89,6 +117,9 @@ class PlexMonitor:
             library = self.plex.library.section(library_name)
             logger.info(f"Found library: {library_name}")
             return library
+        except NotFound:
+            logger.error(f"Library '{library_name}' not found on Plex server")
+            return None
         except Exception as e:
             logger.error(f"Failed to find library '{library_name}': {e}")
             return None
@@ -234,6 +265,45 @@ class PlexMonitor:
             return False
 
 
+def load_tv_buffer() -> Dict[str, Dict[str, Any]]:
+    """Load TV show buffer from disk."""
+    buffer_file = TV_SHOW_BUFFER_FILE
+    try:
+        if os.path.exists(buffer_file):
+            with open(buffer_file, "r") as f:
+                tv_buffer_data: Dict[str, Dict[str, Any]] = json.load(f)
+
+                # Convert timestamp strings back to datetime objects
+                for show_title, data in tv_buffer_data.items():
+                    if isinstance(data.get("last_updated"), str):
+                        data["last_updated"] = datetime.fromisoformat(data["last_updated"])
+                return tv_buffer_data
+        return {}
+    except Exception as e:
+        logger.error(f"Error loading TV show buffer: {e}")
+        return {}
+
+
+def save_tv_buffer(buffer: Dict[str, Dict[str, Any]]) -> bool:
+    """Save TV show buffer to disk."""
+    buffer_file = TV_SHOW_BUFFER_FILE
+    # Prepare buffer for JSON serialization (convert datetime to string)
+    buffer_to_save: Dict[str, Dict[str, Any]] = {}
+    for show_title, data in buffer.items():
+        buffer_copy = data.copy()
+        if isinstance(buffer_copy.get("last_updated"), datetime):
+            buffer_copy["last_updated"] = buffer_copy["last_updated"].isoformat()
+        buffer_to_save[show_title] = buffer_copy
+
+    try:
+        with open(buffer_file, "w") as f:
+            json.dump(buffer_to_save, f)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving TV show buffer: {e}")
+        return False
+
+
 def load_processed_movies() -> Set[str]:
     """Load the set of already processed media keys from disk."""
     try:
@@ -298,23 +368,10 @@ async def check_for_new_media() -> None:
     plex_monitor: PlexMonitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
 
     # Buffer for TV shows to allow grouping across multiple episodes
-    tv_buffer_time: int = 2 * 60 * 60  # Group episodes from same show within 2 hours
-    tv_buffer_file: str = TV_SHOW_BUFFER_FILE
-    tv_show_buffer: Dict[str, Dict[str, Any]] = {}
-
-    # Load existing buffer
-    try:
-        if os.path.exists(tv_buffer_file):
-            with open(tv_buffer_file, "r") as f:
-                tv_buffer_data: Dict[str, Dict[str, Any]] = json.load(f)
-
-                # Convert timestamp strings back to datetime objects
-                for show_title, data in tv_buffer_data.items():
-                    data["last_updated"] = datetime.fromisoformat(data["last_updated"])
-                    tv_show_buffer[show_title] = data
-    except Exception as e:
-        logger.error(f"Error loading TV show buffer: {e}")
-        tv_show_buffer = {}
+    tv_buffer_time: int = (
+        TV_BUFFER_TIME  # Group episodes from same show within TV_BUFFER_TIME seconds
+    )
+    tv_buffer: Dict[str, Dict[str, Any]] = load_tv_buffer()
 
     if NOTIFY_MOVIES:
         logger.info(f"Checking for new movies in library: {MOVIE_LIBRARY}")
@@ -412,13 +469,13 @@ async def check_for_new_media() -> None:
                 shows_to_process.add(show_title)
 
                 # If we already have a buffer for this show, add this episode to it
-                if show_title in tv_show_buffer:
-                    buffer_data: Dict[str, Any] = tv_show_buffer[show_title]
+                if show_title in tv_buffer:
+                    buffer_data: Dict[str, Any] = tv_buffer[show_title]
                     buffer_data["episodes"].append(episode)
                     buffer_data["last_updated"] = datetime.now()
                 else:
                     # Create a new buffer for this show
-                    tv_show_buffer[show_title] = {
+                    tv_buffer[show_title] = {
                         "show_title": show_title,
                         "show_poster_url": episode["show_poster_url"],
                         "episodes": [episode],
@@ -430,24 +487,13 @@ async def check_for_new_media() -> None:
             processed_movies.add(episode_key)
 
         # Save the TV show buffer
-        buffer_to_save: Dict[str, Dict[str, Any]] = {}
-        for show_title, data in tv_show_buffer.items():
-            # Convert datetime to string for JSON serialization
-            buffer_copy: Dict[str, Any] = data.copy()
-            buffer_copy["last_updated"] = buffer_copy["last_updated"].isoformat()
-            buffer_to_save[show_title] = buffer_copy
-
-        try:
-            with open(tv_buffer_file, "w") as f:
-                json.dump(buffer_to_save, f)
-        except Exception as e:
-            logger.error(f"Error saving TV show buffer: {e}")
+        save_tv_buffer(tv_buffer)
 
         # Check for shows that haven't been updated in a while and should be sent
         current_time: datetime = datetime.now()
         shows_to_send: List[str] = []
 
-        for show_title, data in list(tv_show_buffer.items()):
+        for show_title, data in list(tv_buffer.items()):
             time_since_update: float = (current_time - data["last_updated"]).total_seconds()
 
             # Send notification if:
@@ -458,7 +504,7 @@ async def check_for_new_media() -> None:
 
         # Send notifications for shows that are ready
         for show_title in shows_to_send:
-            show_data: Dict[str, Any] = tv_show_buffer[show_title]
+            show_data: Dict[str, Any] = tv_buffer[show_title]
             episodes: List[Dict[str, Any]] = show_data["episodes"]
 
             if not episodes:
@@ -548,24 +594,14 @@ async def check_for_new_media() -> None:
                 )
 
                 # Remove from buffer after sending
-                del tv_show_buffer[show_title]
+                del tv_buffer[show_title]
 
                 time.sleep(1)
             except Exception as e:
                 logger.error(f"Error sending episode notification: {e}")
 
         # Save the TV show buffer again after processing
-        buffer_to_save = {}
-        for show_title, data in tv_show_buffer.items():
-            buffer_copy: Dict[str, Any] = data.copy()
-            buffer_copy["last_updated"] = buffer_copy["last_updated"].isoformat()
-            buffer_to_save[show_title] = buffer_copy
-
-        try:
-            with open(tv_buffer_file, "w") as f:
-                json.dump(buffer_to_save, f)
-        except Exception as e:
-            logger.error(f"Error saving TV show buffer after processing: {e}")
+        save_tv_buffer(tv_buffer)
 
         save_processed_movies(processed_movies)
 
@@ -609,8 +645,67 @@ async def status(ctx: commands.Context) -> None:
     embed.add_field(name="Check Interval", value=f"{CHECK_INTERVAL} seconds", inline=True)
     embed.add_field(name="Processed Media", value=str(len(processed_movies)), inline=True)
 
+    # Add last check timestamp
+    uptime = time.time() - START_TIME
+    days, remainder = divmod(uptime, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    embed.add_field(
+        name="Uptime",
+        value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s",
+        inline=True,
+    )
+
     embed.timestamp = datetime.now()
     await ctx.send(embed=embed)
+
+
+@bot.command(name="healthcheck")
+async def healthcheck(ctx: commands.Context) -> None:
+    """Health check command to verify bot is running properly."""
+    # Check Plex connectivity
+    plex_monitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
+    plex_status = "✅ Connected" if plex_monitor.connect() else "❌ Disconnected"
+
+    # Check Discord channel connectivity
+    channel = bot.get_channel(CHANNEL_ID)
+    channel_status = "✅ Connected" if channel else "❌ Disconnected"
+
+    embed = discord.Embed(
+        title="Health Check",
+        description="System health status",
+        color=(
+            0x00FF00
+            if plex_status.startswith("✅") and channel_status.startswith("✅")
+            else 0xFF0000
+        ),
+    )
+
+    embed.add_field(name="Plex Server", value=plex_status, inline=True)
+    embed.add_field(name="Discord Channel", value=channel_status, inline=True)
+    embed.add_field(
+        name="Data File",
+        value=(
+            f"✅ Found ({len(processed_movies)} items)"
+            if os.path.exists(DATA_FILE)
+            else "❌ Missing"
+        ),
+        inline=True,
+    )
+
+    embed.timestamp = datetime.now()
+    await ctx.send(embed=embed)
+
+
+def signal_handler(sig, frame):
+    """Handle termination signals for clean shutdown."""
+    logger.info("Received shutdown signal, saving data and exiting...")
+    save_processed_movies(processed_movies)
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 
 def main() -> None:

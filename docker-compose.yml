@@ -1,11 +1,12 @@
 services:
   plex-discord-bot:
     container_name: plex-discord-bot
-    image: python:3.10-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
       - ./:/app
-    working_dir: /app
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - CHANNEL_ID=${CHANNEL_ID}
@@ -17,7 +18,13 @@ services:
       - NOTIFY_TV=${NOTIFY_TV}
       - CHECK_INTERVAL=${CHECK_INTERVAL}
       - DATA_FILE=${DATA_FILE}
-    command: >
-      bash -c "pip install --upgrade pip &&
-              pip install -r requirements.txt &&
-              python plex_discord_bot.py"
+      - TV_SHOW_BUFFER_FILE=${TV_SHOW_BUFFER_FILE:-tv_show_buffer.json}
+      - TV_BUFFER_TIME=${TV_BUFFER_TIME:-7200}
+      - PLEX_CONNECT_RETRY=${PLEX_CONNECT_RETRY:-3}
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/app/plex_discord_bot.log') else 1)"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
