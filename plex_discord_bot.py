@@ -45,15 +45,14 @@ DISCORD_TOKEN: Optional[str] = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID: int = int(os.getenv("CHANNEL_ID", "0"))
 PLEX_URL: str = os.getenv("PLEX_URL", "http://localhost:32400")
 PLEX_TOKEN: Optional[str] = os.getenv("PLEX_TOKEN")
-CHECK_INTERVAL: int = int(os.getenv("CHECK_INTERVAL", "300"))
+CHECK_INTERVAL: int = int(os.getenv("CHECK_INTERVAL", "3600"))  # Default to 1 hour
 MOVIE_LIBRARY: str = os.getenv("MOVIE_LIBRARY", "Movies")
 TV_LIBRARY: str = os.getenv("TV_LIBRARY", "TV Shows")
 NOTIFY_MOVIES: bool = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
 NOTIFY_TV: bool = os.getenv("NOTIFY_TV", "true").lower() == "true"
 DATA_FILE: str = os.getenv("DATA_FILE", "processed_media.json")
-TV_SHOW_BUFFER_FILE: str = os.getenv("TV_SHOW_BUFFER_FILE", "tv_show_buffer.json")
-TV_BUFFER_TIME: int = int(os.getenv("TV_BUFFER_TIME", "7200"))  # 2 hours by default
 PLEX_CONNECT_RETRY: int = int(os.getenv("PLEX_CONNECT_RETRY", "3"))
+EXACT_HOUR_CHECK: bool = os.getenv("EXACT_HOUR_CHECK", "false").lower() == "true"
 
 intents: discord.Intents = discord.Intents.default()
 intents.message_content = True
@@ -197,34 +196,22 @@ class PlexMonitor:
 
                     show_poster_url: Optional[str] = None
                     if episode.grandparentThumb:
-                        show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"  # noqa: E501
-
-                    air_date: Optional[datetime] = None
-                    if hasattr(episode, "originallyAvailableAt") and episode.originallyAvailableAt:
-                        air_date = episode.originallyAvailableAt
+                        show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"
 
                     new_episodes.append(
                         {
                             "type": "episode",
                             "key": episode.key,
-                            "title": episode.title,
                             "show_title": episode.grandparentTitle,
-                            "season_number": episode.parentIndex,
-                            "episode_number": episode.index,
-                            "year": episode.year,
-                            "air_date": air_date,
+                            "episode_title": episode.title,
+                            "season": episode.parentIndex,
+                            "episode": episode.index,
                             "added_at": episode.addedAt.isoformat(),
                             "summary": episode.summary,
-                            "content_rating": getattr(episode, "contentRating", "Not Rated"),
-                            "rating": getattr(episode, "audienceRating", None),
+                            "rating": getattr(episode, "rating", None),
                             "poster_url": poster_url,
                             "show_poster_url": show_poster_url,
                             "duration": episode.duration,
-                            "directors": [
-                                director.tag for director in getattr(episode, "directors", [])
-                            ],
-                            "writers": [writer.tag for writer in getattr(episode, "writers", [])],
-                            "actors": [actor.tag for actor in getattr(episode, "roles", [])][:3],
                         }
                     )
                 else:
@@ -234,64 +221,6 @@ class PlexMonitor:
         except Exception as e:
             logger.error(f"Error getting recently added episodes: {e}")
             return []
-
-    def is_first_episode_of_show(self, show_title: str, processed_media: Set[str]) -> bool:
-        """Determine if this is the first episode of a show that has been processed."""
-        if not self.plex:
-            if not self.connect():
-                return False
-
-        try:
-            shows: List[Show] = self.plex.library.search(title=show_title, libtype="show")
-            if not shows:
-                return False
-
-            show: Show = shows[0]
-            episodes: List[Episode] = show.episodes()
-
-            for episode in episodes:
-                if episode.key in processed_media:
-                    return False
-
-            return True
-        except Exception as e:
-            logger.error(f"Error checking if first episode of show: {e}")
-            return False
-
-
-def load_tv_buffer() -> Dict[str, Dict[str, Any]]:
-    """Load TV show buffer from disk."""
-    buffer_file = TV_SHOW_BUFFER_FILE
-    try:
-        if os.path.exists(buffer_file):
-            with open(buffer_file, "r") as f:
-                tv_buffer_data: Dict[str, Dict[str, Any]] = json.load(f)
-                for show_title, data in tv_buffer_data.items():
-                    if isinstance(data.get("last_updated"), str):
-                        data["last_updated"] = datetime.fromisoformat(data["last_updated"])
-                return tv_buffer_data
-        return {}
-    except Exception as e:
-        logger.error(f"Error loading TV show buffer: {e}")
-        return {}
-
-
-def save_tv_buffer(buffer: Dict[str, Dict[str, Any]]) -> bool:
-    """Save TV show buffer to disk."""
-    buffer_file = TV_SHOW_BUFFER_FILE
-    try:
-        buffer_to_save = {}
-        for show_title, data in buffer.items():
-            buffer_to_save[show_title] = data.copy()
-            if isinstance(data.get("last_updated"), datetime):
-                buffer_to_save[show_title]["last_updated"] = data["last_updated"].isoformat()
-
-        with open(buffer_file, "w") as f:
-            json.dump(buffer_to_save, f)
-        return True
-    except Exception as e:
-        logger.error(f"Error saving TV show buffer: {e}")
-        return False
 
 
 def load_processed_movies() -> Set[str]:
@@ -324,10 +253,25 @@ def format_duration(milliseconds: int) -> str:
 
 
 @bot.event
-async def on_ready() -> None:
+async def on_ready():
     """Handler called when the Discord bot is ready and connected."""
-    logger.info(f"Bot logged in as {bot.user}")
-    check_for_new_media.start()
+    logger.info(f"Logged in as {bot.user.name} ({bot.user.id})")
+
+    # Validate channel ID
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel:
+        logger.error(f"Could not find channel with ID {CHANNEL_ID}")
+        await bot.close()
+        return
+
+    logger.info(f"Connected to Discord channel: {CHANNEL_ID}")
+
+
+@bot.event
+async def setup_hook():
+    """Setup hook to run the initial check when the bot starts."""
+    # Run an immediate check when bot starts
+    await check_for_new_media()
 
 
 @tasks.loop(seconds=CHECK_INTERVAL)
@@ -344,6 +288,11 @@ async def check_for_new_media() -> None:
     """
     global processed_movies
 
+    if EXACT_HOUR_CHECK:
+        current_time = datetime.now()
+        if current_time.minute != 0:
+            return
+
     channel: Optional[discord.TextChannel] = bot.get_channel(CHANNEL_ID)
     if not channel:
         logger.error(f"Could not find channel with ID {CHANNEL_ID}")
@@ -356,9 +305,6 @@ async def check_for_new_media() -> None:
         return
 
     plex_monitor: PlexMonitor = PlexMonitor(PLEX_URL, PLEX_TOKEN)
-
-    tv_buffer_time: int = TV_BUFFER_TIME
-    tv_buffer: Dict[str, Dict[str, Any]] = load_tv_buffer()
 
     if NOTIFY_MOVIES:
         logger.info(f"Checking for new movies in library: {MOVIE_LIBRARY}")
@@ -375,16 +321,17 @@ async def check_for_new_media() -> None:
             logger.info(f"Found new movie: {movie['title']} ({movie['year']})")
 
             embed: discord.Embed = discord.Embed(
-                title=f"🎬 New Movie Available: {movie['title']} ({movie['year']})",
-                description=(
-                    movie["summary"][:2048] if movie["summary"] else "No summary available."
-                ),
-                color=0x00FF00,
+                title=f"🎬 New Movie: {movie['title']} ({movie['year']})",
+                description=movie["summary"][:2000],
+                color=discord.Color.blue(),
             )
 
-            if movie["rating"]:
-                embed.add_field(name="Rating", value=f"⭐ {movie['rating']:.1f}/10", inline=True)
+            if movie["poster_url"]:
+                embed.set_thumbnail(url=movie["poster_url"])
 
+            embed.add_field(
+                name="Rating", value=str(movie["rating"]) if movie["rating"] else "N/A", inline=True
+            )
             embed.add_field(name="Content Rating", value=movie["content_rating"], inline=True)
             embed.add_field(name="Duration", value=format_duration(movie["duration"]), inline=True)
 
@@ -398,9 +345,6 @@ async def check_for_new_media() -> None:
 
             if movie["actors"]:
                 embed.add_field(name="Starring", value=", ".join(movie["actors"]), inline=True)
-
-            if movie["poster_url"]:
-                embed.set_thumbnail(url=movie["poster_url"])
 
             embed.timestamp = datetime.now()
             embed.set_footer(text="Added to Plex")
@@ -422,167 +366,61 @@ async def check_for_new_media() -> None:
             TV_LIBRARY, days=1
         )
 
-        shows_to_process: Set[str] = set()
-
+        # Group episodes by show
+        episodes_by_show: Dict[str, Dict[str, Any]] = {}
         for episode in recent_episodes:
-            episode_key: str = episode["key"]
-
-            if episode_key in processed_movies:
-                continue
-
-            is_recent_episode: bool = False
-            if episode["air_date"]:
-                thirty_days_ago: datetime = datetime.now() - timedelta(days=30)
-                if episode["air_date"] >= thirty_days_ago.date():
-                    is_recent_episode = True
-
-            is_first_show_episode: bool = plex_monitor.is_first_episode_of_show(
-                episode["show_title"], processed_movies
-            )
-
-            if is_recent_episode:
-                logger.info(
-                    f"Episode {episode['show_title']} S{episode['season_number']:02d}E"
-                    + f"{episode['episode_number']:02d} is a recent episode (aired within 30 days)"
-                )
-            if is_first_show_episode:
-                logger.info(
-                    f"Episode {episode['show_title']} S{episode['season_number']:02d}E"
-                    + f"{episode['episode_number']:02d} is the first episode of this show on the server"  # noqa: E501
-                )
-
-            if is_recent_episode or is_first_show_episode:
+            if episode["key"] not in processed_movies:
                 show_title: str = episode["show_title"]
-                shows_to_process.add(show_title)
-
-                # If we already have a buffer for this show, add this episode to it
-                if show_title in tv_buffer:
-                    buffer_data: Dict[str, Any] = tv_buffer[show_title]
-                    buffer_data["episodes"].append(episode)
-                    buffer_data["last_updated"] = datetime.now()
-                else:
-                    tv_buffer[show_title] = {
-                        "show_title": show_title,
+                if show_title not in episodes_by_show:
+                    episodes_by_show[show_title] = {
                         "show_poster_url": episode["show_poster_url"],
-                        "episodes": [episode],
-                        "last_updated": datetime.now(),
-                        "is_first_show": is_first_show_episode,
+                        "episodes": [],
                     }
 
-            processed_movies.add(episode_key)
-
-        save_tv_buffer(tv_buffer)
-
-        # Check for shows that haven't been updated in a while and should be sent
-        current_time: datetime = datetime.now()
-        shows_to_send: List[str] = []
-
-        for show_title, data in list(tv_buffer.items()):
-            time_since_update: float = (current_time - data["last_updated"]).total_seconds()
-
-            if (time_since_update >= tv_buffer_time) or (show_title in shows_to_process):
-                shows_to_send.append(show_title)
-
-        # Send notifications for shows that are ready
-        for show_title in shows_to_send:
-            show_data: Dict[str, Any] = tv_buffer[show_title]
-            episodes: List[Dict[str, Any]] = show_data["episodes"]
-
-            if not episodes:
-                continue
-
-            logger.info(f"Sending notification for {len(episodes)} episode(s) of {show_title}")
-
-            embed_title: str = f"📺 New Episodes Available: {show_title}"
-            embed_color: int = 0x3498DB
-
-            if show_data.get("is_first_show", False):
-                embed_title = f"📺 NEW SHOW: {show_title}"
-                embed_color = 0x9B59B6
-
-            embed: discord.Embed = discord.Embed(
-                title=embed_title,
-                description=f"{len(episodes)} new episode(s) added to Plex.",
-                color=embed_color,
-            )
-
-            episode_list: str = ""
-            for episode in episodes:
-                episode_entry: str = (
-                    f"• S{episode['season_number']:02d}E{episode['episode_number']:02d} - {episode['title']}"  # noqa: E501
+                episodes_by_show[show_title]["episodes"].append(
+                    {
+                        "title": episode["episode_title"],
+                        "season": episode["season"],
+                        "episode": episode["episode"],
+                        "rating": episode["rating"],
+                        "summary": episode["summary"],
+                    }
                 )
 
-                if episode["air_date"]:
-                    thirty_days_ago: datetime = datetime.now() - timedelta(days=30)
-                    if episode["air_date"] >= thirty_days_ago.date():
-                        episode_entry += " 📡 *Recently Aired*"
-
-                episode_list += episode_entry + "\n"
-
-            embed.add_field(name="Episodes", value=episode_list, inline=False)
-
-            if len(episodes) == 1:
-                episode: Dict[str, Any] = episodes[0]
-                if episode["summary"]:
-                    embed.description = episode["summary"][:2048]
-
-                if episode["rating"]:
-                    embed.add_field(
-                        name="Rating",
-                        value=f"⭐ {episode['rating']:.1f}/10",
-                        inline=True,
-                    )
-
-                embed.add_field(name="Content Rating", value=episode["content_rating"], inline=True)
-                embed.add_field(
-                    name="Duration",
-                    value=format_duration(episode["duration"]),
-                    inline=True,
+        # Send notifications for each show
+        for show_title, show_data in episodes_by_show.items():
+            if show_data["episodes"]:
+                embed: discord.Embed = discord.Embed(
+                    title=f"📺 New Episodes: {show_title}",
+                    color=discord.Color.blue(),
                 )
 
-                if episode.get("directors"):
-                    embed.add_field(
-                        name="Director(s)",
-                        value=", ".join(episode["directors"]),
-                        inline=True,
+                if show_data["show_poster_url"]:
+                    embed.set_thumbnail(url=show_data["show_poster_url"])
+
+                # Add episode list
+                episode_list: List[str] = []
+                for episode in show_data["episodes"]:
+                    episode_list.append(
+                        f"• S{episode['season']:02d}E{episode['episode']:02d}: {episode['title']}"
                     )
+                embed.add_field(name="Episodes", value="\n".join(episode_list), inline=False)
 
-                if episode.get("writers"):
-                    embed.add_field(
-                        name="Writer(s)",
-                        value=", ".join(episode["writers"]),
-                        inline=True,
-                    )
+                embed.timestamp = datetime.now()
+                embed.set_footer(text="Added to Plex")
 
-                if episode["actors"]:
-                    embed.add_field(
-                        name="Starring", value=", ".join(episode["actors"]), inline=True
-                    )
+                try:
+                    await channel.send(embed=embed)
+                    logger.info(f"Sent notification for show: {show_title}")
 
-                if episode["poster_url"]:
-                    embed.set_image(url=episode["poster_url"])
+                    # Mark all episodes as processed
+                    for episode in show_data["episodes"]:
+                        processed_movies.add(episode["key"])
+                    save_processed_movies(processed_movies)
 
-            if show_data["show_poster_url"]:
-                embed.set_thumbnail(url=show_data["show_poster_url"])
-
-            embed.timestamp = datetime.now()
-            embed.set_footer(text="Added to Plex")
-
-            try:
-                await channel.send(embed=embed)
-                logger.info(
-                    f"Sent notification for show: {show_title} with {len(episodes)} episode(s)"
-                )
-
-                del tv_buffer[show_title]
-
-                time.sleep(1)
-            except Exception as e:
-                logger.error(f"Error sending TV show notification: {e}")
-
-        save_tv_buffer(tv_buffer)
-
-        save_processed_movies(processed_movies)
+                    time.sleep(1)
+                except Exception as e:
+                    logger.error(f"Error sending TV show notification: {e}")
 
 
 @bot.command(name="checkplex")
@@ -692,110 +530,73 @@ signal.signal(signal.SIGTERM, signal_handler)
 
 def main() -> None:
     """
-    Main function to run the bot.
-
-    Handles command-line argument parsing, configuration validation,
-    and starting the Discord bot.
+    Main function to handle command-line arguments and starting the Discord bot.
     """
     global processed_movies, DISCORD_TOKEN, CHANNEL_ID, PLEX_URL, PLEX_TOKEN, CHECK_INTERVAL
-    global MOVIE_LIBRARY, TV_LIBRARY, NOTIFY_MOVIES, NOTIFY_TV, DATA_FILE, TV_SHOW_BUFFER_FILE
-    global TV_BUFFER_TIME, PLEX_CONNECT_RETRY
+    global MOVIE_LIBRARY, TV_LIBRARY, NOTIFY_MOVIES, NOTIFY_TV, DATA_FILE, PLEX_CONNECT_RETRY
 
     parser = argparse.ArgumentParser(
         description="Plex Discord Bot - Send notifications for new movies and TV episodes"
     )
     parser.add_argument("--token", help="Discord bot token")
-    parser.add_argument("--channel", type=int, help="Discord channel ID")
-    parser.add_argument("--plex-url", help="Plex server URL")
-    parser.add_argument("--plex-token", help="Plex server token")
-    parser.add_argument("--interval", type=int, help="Check interval in seconds")
-    parser.add_argument("--movie-library", help="Plex movie library name")
-    parser.add_argument("--tv-library", help="Plex TV show library name")
-    parser.add_argument(
-        "--notify-movies",
-        choices=["true", "false"],
-        help="Enable/disable movie notifications",
-    )
-    parser.add_argument(
-        "--notify-tv",
-        choices=["true", "false"],
-        help="Enable/disable TV show notifications",
-    )
+    parser.add_argument("--channel", type=int, help="Discord channel ID for notifications")
+    parser.add_argument("--plex-url", help="URL of your Plex server")
+    parser.add_argument("--plex-token", help="Plex authentication token")
+    parser.add_argument("--movie-library", help="Name of the Plex movie library")
+    parser.add_argument("--tv-library", help="Name of the Plex TV show library")
+    parser.add_argument("--notify-movies", help="Enable/disable movie notifications")
+    parser.add_argument("--notify-tv", help="Enable/disable TV show notifications")
     parser.add_argument("--data-file", help="File to store processed media")
-    parser.add_argument("--buffer-file", help="File to store TV show buffer")
-    parser.add_argument("--buffer-time", type=int, help="Time to buffer TV episodes")
     parser.add_argument("--retry", type=int, help="Number of retries for Plex connection")
+    parser.add_argument("--interval", type=int, help="Check interval in seconds")
+    parser.add_argument("--exact-hour", action="store_true", help="Run check exactly on the hour")
 
     args = parser.parse_args()
 
-    if args.token:
-        DISCORD_TOKEN = args.token
-    if args.channel:
-        CHANNEL_ID = args.channel
-    if args.plex_url:
-        PLEX_URL = args.plex_url
-    if args.plex_token:
-        PLEX_TOKEN = args.plex_token
-    if args.interval:
-        CHECK_INTERVAL = args.interval
-    if args.movie_library:
-        MOVIE_LIBRARY = args.movie_library
-    if args.tv_library:
-        TV_LIBRARY = args.tv_library
-    if args.notify_movies:
-        NOTIFY_MOVIES = args.notify_movies.lower() == "true"
-    if args.notify_tv:
-        NOTIFY_TV = args.notify_tv.lower() == "true"
-    if args.data_file:
-        DATA_FILE = args.data_file
-    if args.buffer_file:
-        TV_SHOW_BUFFER_FILE = args.buffer_file
-    if args.buffer_time:
-        TV_BUFFER_TIME = args.buffer_time
-    if args.retry:
-        PLEX_CONNECT_RETRY = args.retry
+    # Load environment variables
+    load_dotenv()
 
+    # Set configuration from environment variables or defaults
+    DISCORD_TOKEN = args.token or os.getenv("DISCORD_TOKEN")
+    CHANNEL_ID = args.channel or int(os.getenv("CHANNEL_ID", "0"))
+    PLEX_URL = args.plex_url or os.getenv("PLEX_URL", "http://localhost:32400")
+    PLEX_TOKEN = args.plex_token or os.getenv("PLEX_TOKEN")
+    CHECK_INTERVAL = args.interval or int(os.getenv("CHECK_INTERVAL", "3600"))
+    MOVIE_LIBRARY = args.movie_library or os.getenv("MOVIE_LIBRARY", "Movies")
+    TV_LIBRARY = args.tv_library or os.getenv("TV_LIBRARY", "TV Shows")
+    NOTIFY_MOVIES = args.notify_movies or os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
+    NOTIFY_TV = args.notify_tv or os.getenv("NOTIFY_TV", "true").lower() == "true"
+    DATA_FILE = args.data_file or os.getenv("DATA_FILE", "processed_media.json")
+    PLEX_CONNECT_RETRY = args.retry or int(os.getenv("PLEX_CONNECT_RETRY", "3"))
+    EXACT_HOUR_CHECK = args.exact_hour or os.getenv("EXACT_HOUR_CHECK", "false").lower() == "true"
+
+    # Validate required configuration
     if not DISCORD_TOKEN:
-        logger.error(
-            "Discord token is required. Set DISCORD_TOKEN environment variable or use --token"
-        )
-        return
-
-    if CHANNEL_ID == 0:
-        logger.error(
-            "Discord channel ID is required. Set CHANNEL_ID environment variable or use --channel"
-        )
-        return
-
+        logger.error("Discord token is required")
+        sys.exit(1)
+    if not CHANNEL_ID:
+        logger.error("Discord channel ID is required")
+        sys.exit(1)
+    if not PLEX_URL:
+        logger.error("Plex server URL is required")
+        sys.exit(1)
     if not PLEX_TOKEN:
-        logger.error(
-            "Plex token is required. Set PLEX_TOKEN environment variable or use --plex-token"
-        )
-        return
+        logger.error("Plex authentication token is required")
+        sys.exit(1)
 
-    if not NOTIFY_MOVIES and not NOTIFY_TV:
-        logger.error("Both movie and TV notifications are disabled. Enable at least one.")
-        return
-
+    # Load processed movies
     processed_movies = load_processed_movies()
-    logger.info(f"Loaded {len(processed_movies)} processed media items from {DATA_FILE}")
 
-    logger.info(f"Monitoring Plex server at {PLEX_URL}")
-    if NOTIFY_MOVIES:
-        logger.info(f"Movie notifications enabled for library: {MOVIE_LIBRARY}")
-    else:
-        logger.info("Movie notifications disabled")
-
-    if NOTIFY_TV:
-        logger.info(f"TV show notifications enabled for library: {TV_LIBRARY}")
-    else:
-        logger.info("TV show notifications disabled")
-
-    logger.info("Starting bot...")
+    # Start the bot
     try:
+        logger.info(f"Starting Plex Discord Bot with check interval: {CHECK_INTERVAL} seconds")
+        if EXACT_HOUR_CHECK:
+            logger.info("Exact hour checking enabled")
+
         bot.run(DISCORD_TOKEN)
     except Exception as e:
         logger.error(f"Error starting bot: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

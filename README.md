@@ -4,14 +4,15 @@ A Discord bot that notifies your server when new movies and TV shows are added t
 
 ## Features
 
-- 🎬 Posts notifications to a Discord channel when new movies and TV shows are added to Plex
-- 📊 Includes media details like rating, genres, directors, and actors
-- 🖼️ Displays movie/episode poster thumbnails in notifications
-- ⏱️ Customizable check interval
-- 💾 Keeps track of processed media to avoid duplicate notifications
-- 🤖 Simple commands for manual checks and status updates
-- 🛡️ Built-in health monitoring and error handling
-- 🔄 Automatic grouping of multiple TV episodes from the same show
+- Posts notifications to a Discord channel when new movies and TV shows are added to Plex
+- Includes media details like rating, genres, directors, and actors
+- Displays movie/episode poster thumbnails in notifications
+- Customizable check interval (default: 1 hour)
+- Keeps track of processed media to avoid duplicate notifications
+- Simple commands for manual checks and status updates
+- Built-in health monitoring and error handling
+- Consolidated TV episode notifications (one message per show)
+- Option for exact hourly checks
 
 ## Requirements
 
@@ -100,10 +101,9 @@ Configuration can be done via environment variables or command line arguments:
 | `TV_LIBRARY`          | `--tv-library`        | Name of the Plex TV show library (default: TV Shows)          |
 | `NOTIFY_MOVIES`       | `--notify-movies`     | Enable/disable movie notifications (default: true)            |
 | `NOTIFY_TV`           | `--notify-tv`         | Enable/disable TV show notifications (default: true)          |
-| `CHECK_INTERVAL`      | `--interval`          | Check interval in seconds (default: 300)                      |
+| `CHECK_INTERVAL`      | `--interval`          | Check interval in seconds (default: 3600 - 1 hour)           |
+| `EXACT_HOUR_CHECK`    | `--exact-hour`        | Run check exactly on the hour (default: false)               |
 | `DATA_FILE`           | `--data-file`         | File to store processed media (default: processed_media.json) |
-| `TV_SHOW_BUFFER_FILE` | `--buffer-file`       | File to store TV buffer data (default: tv_show_buffer.json)   |
-| `TV_BUFFER_TIME`      | `--buffer-time`       | Seconds to buffer TV episodes (default: 7200 - 2 hours)       |
 | `PLEX_CONNECT_RETRY`  | `--retry`             | Number of Plex connection retries (default: 3)                |
 | `LOGGING_LEVEL`       | N/A                   | Logging level (default: INFO)                                 |
 

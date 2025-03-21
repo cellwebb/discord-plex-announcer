@@ -10,9 +10,7 @@ from plex_discord_bot import (
     PlexMonitor,
     format_duration,
     load_processed_movies,
-    load_tv_buffer,
     save_processed_movies,
-    save_tv_buffer,
 )
 
 
@@ -22,25 +20,13 @@ class TestPlexBot(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         self.test_data_file = "test_processed_media.json"
-        self.test_buffer_file = "test_tv_buffer.json"
 
         self.sample_movies = {"movie1", "movie2", "movie3"}
-        self.sample_tv_buffer = {
-            "Show1": {
-                "show_title": "Show1",
-                "show_poster_url": "http://example.com/poster1.jpg",
-                "episodes": [{"title": "Episode1", "key": "ep1"}],
-                "last_updated": datetime.now(),
-                "is_first_show": True,
-            }
-        }
 
     def tearDown(self):
         """Clean up after tests."""
         if os.path.exists(self.test_data_file):
             os.remove(self.test_data_file)
-        if os.path.exists(self.test_buffer_file):
-            os.remove(self.test_buffer_file)
 
     def test_format_duration(self):
         """Test formatting duration from milliseconds to human-readable string."""
@@ -67,23 +53,6 @@ class TestPlexBot(unittest.TestCase):
 
             # Check if data matches
             self.assertEqual(loaded_movies, self.sample_movies)
-
-    def test_save_and_load_tv_buffer(self):
-        """Test saving and loading TV buffer."""
-        with patch("plex_discord_bot.TV_SHOW_BUFFER_FILE", self.test_buffer_file):
-            # Save sample buffer
-            save_tv_buffer(self.sample_tv_buffer)
-
-            # Load it back
-            loaded_buffer = load_tv_buffer()
-
-            # Check if keys match
-            self.assertEqual(set(loaded_buffer.keys()), set(self.sample_tv_buffer.keys()))
-
-            # Check show title
-            self.assertEqual(
-                loaded_buffer["Show1"]["show_title"], self.sample_tv_buffer["Show1"]["show_title"]
-            )
 
     @patch("plexapi.server.PlexServer")
     def test_plex_monitor_connect(self, mock_plex_server):
