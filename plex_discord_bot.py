@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 from plexapi.exceptions import NotFound, Unauthorized
 from plexapi.library import LibrarySection
 from plexapi.server import PlexServer
-from plexapi.video import Episode, Movie, Show
+from plexapi.video import Episode, Movie
 
 # Configure logging
 load_dotenv()
@@ -196,7 +196,7 @@ class PlexMonitor:
 
                     show_poster_url: Optional[str] = None
                     if episode.grandparentThumb:
-                        show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"
+                        show_poster_url = f"{self.plex_url}{episode.grandparentThumb}?X-Plex-Token={self.plex_token}"  # noqa: E501
 
                     new_episodes.append(
                         {
