@@ -4,8 +4,7 @@ A Discord bot that notifies your server when new movies and TV shows are added t
 
 ## Features
 
-- 🎬 Posts notifications to a Discord channel when new movies are added to Plex
-- 📺 Sends alerts for new TV show episodes
+- 🎬 Posts notifications to a Discord channel when new movies and TV shows are added to Plex
 - 📊 Includes media details like rating, genres, directors, and actors
 - 🖼️ Displays movie/episode poster thumbnails in notifications
 - ⏱️ Customizable check interval
@@ -34,6 +33,48 @@ The easiest and recommended way to run the bot is with Docker Compose:
 
 This method handles all dependencies and ensures a clean, isolated environment for the bot.
 
+### Synology NAS Deployment
+
+To deploy on a Synology NAS using Docker Container Manager:
+
+1. **Prerequisites**:
+
+   - Install Docker package from Synology Package Center
+   - Enable SSH on your Synology (Control Panel → Terminal & SNMP → Enable SSH)
+
+2. **Installation Steps**:
+
+   - Connect to your Synology via SSH: `ssh username@synology_ip`
+   - Create a directory for the bot: `mkdir -p /volume1/docker/plex-discord-bot`
+   - Navigate to the directory: `cd /volume1/docker/plex-discord-bot`
+   - Download the repository files:
+
+     ```bash
+     curl -L https://github.com/your-username/discord-plex-announcer/archive/refs/heads/main.zip -o main.zip
+     unzip main.zip
+     mv discord-plex-announcer-main/* .
+     rm -rf discord-plex-announcer-main main.zip
+     ```
+
+   - Copy and edit the environment file: `cp .env.example .env`
+   - Edit the .env file with your values: `vi .env`
+
+3. **Launch in Docker Container Manager**:
+
+   - Open Docker Container Manager in DSM
+   - Go to "Registry" → Search for "plex-discord-bot" (if you've pushed the image to Docker Hub) OR
+   - Go to "Image" → "Add" → "Add From URL" → Enter the GitHub repository URL
+   - Alternatively, use "Container" → "Create" → "Import from docker-compose.yml" and browse to the docker-compose.yml file in your created directory
+
+4. **Volume Mapping**:
+
+   - Map `/volume1/docker/plex-discord-bot` to `/app` inside the container to persist data
+
+5. **Environment Variables**:
+   - Ensure all required environment variables from the .env file are added to the container configuration
+
+For troubleshooting, check the container logs through the Docker Container Manager interface.
+
 ## Manual Installation
 
 If you prefer not to use Docker:
@@ -49,22 +90,22 @@ For detailed setup instructions, see [SETUP.md](SETUP.md).
 
 Configuration can be done via environment variables or command line arguments:
 
-| Environment Variable   | Command Line Argument | Description                                                      |
-| ---------------------- | --------------------- | ---------------------------------------------------------------- |
-| `DISCORD_TOKEN`        | `--token`             | Discord bot token                                                |
-| `CHANNEL_ID`           | `--channel`           | Discord channel ID for notifications                             |
-| `PLEX_URL`             | `--plex-url`          | URL of your Plex server (default: `http://localhost:32400`)      |
-| `PLEX_TOKEN`           | `--plex-token`        | Plex authentication token                                        |
-| `MOVIE_LIBRARY`        | `--movie-library`     | Name of the Plex movie library (default: Movies)                 |
-| `TV_LIBRARY`           | `--tv-library`        | Name of the Plex TV show library (default: TV Shows)             |
-| `NOTIFY_MOVIES`        | `--notify-movies`     | Enable/disable movie notifications (default: true)               |
-| `NOTIFY_TV`            | `--notify-tv`         | Enable/disable TV show notifications (default: true)             |
-| `CHECK_INTERVAL`       | `--interval`          | Check interval in seconds (default: 300)                         |
-| `DATA_FILE`            | `--data-file`         | File to store processed media (default: processed_media.json)    |
-| `TV_SHOW_BUFFER_FILE`  | `--buffer-file`       | File to store TV buffer data (default: tv_show_buffer.json)      |
-| `TV_BUFFER_TIME`       | `--buffer-time`       | Seconds to buffer TV episodes (default: 7200 - 2 hours)          |
-| `PLEX_CONNECT_RETRY`   | `--retry`             | Number of Plex connection retries (default: 3)                   |
-| `LOGGING_LEVEL`        | N/A                   | Logging level (default: INFO)                                    |
+| Environment Variable  | Command Line Argument | Description                                                   |
+| --------------------- | --------------------- | ------------------------------------------------------------- |
+| `DISCORD_TOKEN`       | `--token`             | Discord bot token                                             |
+| `CHANNEL_ID`          | `--channel`           | Discord channel ID for notifications                          |
+| `PLEX_URL`            | `--plex-url`          | URL of your Plex server (default: `http://localhost:32400`)   |
+| `PLEX_TOKEN`          | `--plex-token`        | Plex authentication token                                     |
+| `MOVIE_LIBRARY`       | `--movie-library`     | Name of the Plex movie library (default: Movies)              |
+| `TV_LIBRARY`          | `--tv-library`        | Name of the Plex TV show library (default: TV Shows)          |
+| `NOTIFY_MOVIES`       | `--notify-movies`     | Enable/disable movie notifications (default: true)            |
+| `NOTIFY_TV`           | `--notify-tv`         | Enable/disable TV show notifications (default: true)          |
+| `CHECK_INTERVAL`      | `--interval`          | Check interval in seconds (default: 300)                      |
+| `DATA_FILE`           | `--data-file`         | File to store processed media (default: processed_media.json) |
+| `TV_SHOW_BUFFER_FILE` | `--buffer-file`       | File to store TV buffer data (default: tv_show_buffer.json)   |
+| `TV_BUFFER_TIME`      | `--buffer-time`       | Seconds to buffer TV episodes (default: 7200 - 2 hours)       |
+| `PLEX_CONNECT_RETRY`  | `--retry`             | Number of Plex connection retries (default: 3)                |
+| `LOGGING_LEVEL`       | N/A                   | Logging level (default: INFO)                                 |
 
 ## Commands
 
