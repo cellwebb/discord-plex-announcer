@@ -115,6 +115,136 @@ For troubleshooting, check the container logs through the Docker Container Manag
 docker-compose logs -f
 ```
 
+### Deploying with Pre-built Images from GitHub Container Registry
+
+For the simplest deployment experience, you can use our pre-built Docker images from GitHub Container Registry:
+
+1. **On your Synology NAS or any Docker host**:
+
+   - Create a directory for the bot:
+
+     ```bash
+     mkdir -p /volume1/docker/plex-discord-bot
+     cd /volume1/docker/plex-discord-bot
+     ```
+
+   - Create a deployment docker-compose.yml file:
+
+     ```bash
+     cat > docker-compose.yml << 'EOF'
+     services:
+       plex-discord-bot:
+         container_name: plex-discord-bot
+         image: ghcr.io/cellwebb/discord-plex-announcer:latest
+         restart: unless-stopped
+         volumes:
+           - ./:/app
+         environment:
+           - DISCORD_TOKEN=${DISCORD_TOKEN}
+           - CHANNEL_ID=${CHANNEL_ID}
+           - PLEX_URL=${PLEX_URL}
+           - PLEX_TOKEN=${PLEX_TOKEN}
+           - MOVIE_LIBRARY=${MOVIE_LIBRARY:-Movies}
+           - TV_LIBRARY=${TV_LIBRARY:-TV Shows}
+           - NOTIFY_MOVIES=${NOTIFY_MOVIES:-true}
+           - NOTIFY_TV=${NOTIFY_TV:-true}
+           - CHECK_INTERVAL=${CHECK_INTERVAL:-3600}
+           - DATA_FILE=${DATA_FILE:-processed_media.json}
+           - PLEX_CONNECT_RETRY=${PLEX_CONNECT_RETRY:-3}
+           - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+         healthcheck:
+           test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/app/plex_discord_bot.log') else 1)"]
+           interval: 1m
+           timeout: 10s
+           retries: 3
+           start_period: 30s
+     EOF
+     ```
+
+   - Create a .env file with your configuration:
+
+     ```bash
+     cat > .env << 'EOF'
+     DISCORD_TOKEN=your_discord_token
+     CHANNEL_ID=your_channel_id
+     PLEX_URL=http://your_plex_server:32400
+     PLEX_TOKEN=your_plex_token
+     EOF
+     ```
+
+   - Run the container:
+
+     ```bash
+     docker-compose up -d
+     ```
+
+2. **To update to the latest version**:
+
+   ```bash
+   docker-compose pull
+   docker-compose up -d
+   ```
+
+This method pulls the pre-built image directly from GitHub Container Registry, eliminating the need to build the image locally. The images are automatically built and pushed whenever changes are made to the main branch.
+
+### GitHub Container Registry Authentication
+
+If you encounter authentication issues when pulling the image, you may need to authenticate with GitHub Container Registry:
+
+1. Create a GitHub Personal Access Token with the `read:packages` scope at [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
+
+2. Log in to the GitHub Container Registry:
+
+   ```bash
+   echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+   ```
+
+   Replace `USERNAME` with your GitHub username and `$GITHUB_TOKEN` with your personal access token.
+
+3. Once authenticated, you can pull the image:
+
+   ```bash
+   docker pull ghcr.io/cellwebb/discord-plex-announcer:latest
+   ```
+
+For most users, authentication may not be necessary as the container images are public. However, GitHub may impose rate limits on anonymous pulls, so authentication is recommended for frequent usage.
+
+### Using docker-compose.deploy.yml
+
+The repository includes a `docker-compose.deploy.yml` file specifically for deploying with the pre-built image from GitHub Container Registry. You can use this file directly:
+
+1. Clone the repository or download just the `docker-compose.deploy.yml` file:
+
+   ```bash
+   curl -O https://raw.githubusercontent.com/cellwebb/discord-plex-announcer/main/docker-compose.deploy.yml
+   ```
+
+2. Create a `.env` file with your configuration:
+
+   ```bash
+   cat > .env << 'EOF'
+   DISCORD_TOKEN=your_discord_token
+   CHANNEL_ID=your_channel_id
+   PLEX_URL=http://your_plex_server:32400
+   PLEX_TOKEN=your_plex_token
+   EOF
+   ```
+
+3. Deploy using the file:
+
+   ```bash
+   docker-compose -f docker-compose.deploy.yml up -d
+   ```
+
+4. To update to the latest version:
+
+   ```bash
+   docker-compose -f docker-compose.deploy.yml pull
+   docker-compose -f docker-compose.deploy.yml up -d
+   ```
+
+This method is particularly useful if you want to customize the deployment configuration while still using the pre-built image.
+
 ## Manual Installation
 
 If you prefer not to use Docker:
@@ -154,34 +284,34 @@ This project includes a Makefile to streamline common development tasks:
 # Show all available commands
 make help
 
-# Set up development environment (creates venv and installs dependencies)
+# Setup the virtual environment and install dependencies
 make setup
 
 # Run tests
 make test
 
-# Run tests with coverage
-make test-cov
-
-# Lint code with flake8
+# Run linting
 make lint
 
 # Format code with black
 make format
 
-# Build Docker image
-make docker-build
+# Run the bot locally
+make run
 
-# Run with Docker
-make docker-run
+# Docker commands
+make docker-build    # Build the Docker image
+make docker-up       # Start the Docker container
+make docker-down     # Stop the Docker container
+make docker-logs     # View Docker container logs
 
-# View Docker logs
-make docker-logs
+# GitHub Container Registry commands
+make ghcr-pull       # Pull the latest image from GitHub Container Registry
+make ghcr-up         # Start the container using the image from GitHub Container Registry
+make ghcr-down       # Stop the container
+make ghcr-logs       # View container logs
 
-# Stop Docker container
-make docker-stop
-
-# Clean up (removes venv and cache files)
+# Clean up
 make clean
 ```
 

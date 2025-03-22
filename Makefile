@@ -1,4 +1,4 @@
-.PHONY: help setup venv install test lint format run docker-build docker-run docker-stop clean
+.PHONY: help setup venv install test lint format run docker-build docker-run docker-stop docker-logs ghcr-pull ghcr-up ghcr-down ghcr-logs clean
 
 # Default Python executable and virtual environment path
 PYTHON := python3
@@ -36,18 +36,34 @@ format: ## Format code with black
 run: ## Run the Discord bot locally
 	$(VENV_PYTHON) plex_discord_bot.py
 
+# Docker commands
 docker-build: ## Build the Docker image
 	docker-compose build
 
-docker-run: ## Run the Docker container
+docker-up: ## Run the Docker container
 	docker-compose up -d
 
-docker-stop: ## Stop the Docker container
+docker-down: ## Stop the Docker container
 	docker-compose down
 
 docker-logs: ## View Docker container logs
 	docker-compose logs -f
 
+# GitHub Container Registry commands
+ghcr-pull: ## Pull the Docker image from GitHub Container Registry
+	docker-compose -f docker-compose.deploy.yml pull
+
+ghcr-up: ## Run the Docker container from GitHub Container Registry
+	docker-compose -f docker-compose.deploy.yml up -d
+
+ghcr-down: ## Stop the Docker container from GitHub Container Registry
+	docker-compose -f docker-compose.deploy.yml down
+
+ghcr-logs: ## View Docker container logs from GitHub Container Registry
+	docker-compose -f docker-compose.deploy.yml logs -f
+
+# Clean up
 clean: ## Remove virtual environment and cache files
 	rm -rf $(VENV) __pycache__ .pytest_cache .coverage
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+	rm -rf htmlcov

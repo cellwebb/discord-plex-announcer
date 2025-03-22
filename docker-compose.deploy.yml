@@ -1,0 +1,26 @@
+services:
+  plex-discord-bot:
+    container_name: plex-discord-bot
+    image: ghcr.io/cellwebb/discord-plex-announcer:latest
+    restart: unless-stopped
+    volumes:
+      - ./:/app
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - CHANNEL_ID=${CHANNEL_ID}
+      - PLEX_URL=${PLEX_URL}
+      - PLEX_TOKEN=${PLEX_TOKEN}
+      - MOVIE_LIBRARY=${MOVIE_LIBRARY:-Movies}
+      - TV_LIBRARY=${TV_LIBRARY:-TV Shows}
+      - NOTIFY_MOVIES=${NOTIFY_MOVIES:-true}
+      - NOTIFY_TV=${NOTIFY_TV:-true}
+      - CHECK_INTERVAL=${CHECK_INTERVAL:-3600}
+      - DATA_FILE=${DATA_FILE:-processed_media.json}
+      - PLEX_CONNECT_RETRY=${PLEX_CONNECT_RETRY:-3}
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/app/plex_discord_bot.log') else 1)"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
