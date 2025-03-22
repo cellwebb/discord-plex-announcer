@@ -113,10 +113,16 @@ Configuration can be done via environment variables or command line arguments:
 
 ## Testing
 
-Basic unit tests are included. To run tests:
+The project uses pytest for testing. To run tests:
 
 ```bash
-python -m unittest test_plex_bot.py
+python -m pytest
+```
+
+To run tests with coverage reports:
+
+```bash
+python -m pytest --cov=. --cov-report=term
 ```
 
 ## License
