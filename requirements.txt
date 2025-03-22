@@ -4,3 +4,6 @@ requests
 python-dotenv
 pytest
 pytest-cov
+flake8
+black
+pre-commit

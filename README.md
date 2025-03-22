@@ -80,11 +80,76 @@ For troubleshooting, check the container logs through the Docker Container Manag
 If you prefer not to use Docker:
 
 1. Clone this repository
-2. Install dependencies: `pip install -r requirements.txt` (requires Python 3.8+)
+2. Set up a virtual environment and install dependencies using the Makefile:
+
+   ```bash
+   make setup
+   source venv/bin/activate
+   ```
+
+   Or install dependencies directly:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
 3. Copy `.env.example` to `.env` and fill in your configuration
-4. Run the bot: `python plex_discord_bot.py`
+4. Run the bot:
+
+   ```bash
+   # Using the Makefile
+   make run
+   
+   # Or directly
+   python plex_discord_bot.py
+   ```
 
 For detailed setup instructions, see [SETUP.md](SETUP.md).
+
+## Development
+
+This project includes a Makefile to streamline common development tasks:
+
+```bash
+# Show all available commands
+make help
+
+# Set up development environment (creates venv and installs dependencies)
+make setup
+
+# Run tests
+make test
+
+# Run tests with coverage
+make test-cov
+
+# Lint code with flake8
+make lint
+
+# Format code with black
+make format
+
+# Build Docker image
+make docker-build
+
+# Run with Docker
+make docker-run
+
+# View Docker logs
+make docker-logs
+
+# Stop Docker container
+make docker-stop
+
+# Clean up (removes venv and cache files)
+make clean
+```
+
+The project also includes pre-commit hooks for code quality. After installing dependencies, set up pre-commit with:
+
+```bash
+pre-commit install
+```
 
 ## Configuration
 
