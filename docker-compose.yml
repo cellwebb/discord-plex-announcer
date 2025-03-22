@@ -18,8 +18,6 @@ services:
       - NOTIFY_TV=${NOTIFY_TV}
       - CHECK_INTERVAL=${CHECK_INTERVAL}
       - DATA_FILE=${DATA_FILE}
-      - TV_SHOW_BUFFER_FILE=${TV_SHOW_BUFFER_FILE:-tv_show_buffer.json}
-      - TV_BUFFER_TIME=${TV_BUFFER_TIME:-7200}
       - PLEX_CONNECT_RETRY=${PLEX_CONNECT_RETRY:-3}
       - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
     healthcheck:

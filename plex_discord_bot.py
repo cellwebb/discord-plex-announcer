@@ -52,7 +52,6 @@ NOTIFY_MOVIES: bool = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
 NOTIFY_TV: bool = os.getenv("NOTIFY_TV", "true").lower() == "true"
 DATA_FILE: str = os.getenv("DATA_FILE", "processed_media.json")
 PLEX_CONNECT_RETRY: int = int(os.getenv("PLEX_CONNECT_RETRY", "3"))
-EXACT_HOUR_CHECK: bool = os.getenv("EXACT_HOUR_CHECK", "false").lower() == "true"
 
 intents: discord.Intents = discord.Intents.default()
 intents.message_content = True
@@ -287,11 +286,6 @@ async def check_for_new_media() -> None:
     3. Groups episodes from the same show to reduce notification clutter
     """
     global processed_movies
-
-    if EXACT_HOUR_CHECK:
-        current_time = datetime.now()
-        if current_time.minute != 0:
-            return
 
     channel: Optional[discord.TextChannel] = bot.get_channel(CHANNEL_ID)
     if not channel:
@@ -549,7 +543,6 @@ def main() -> None:
     parser.add_argument("--data-file", help="File to store processed media")
     parser.add_argument("--retry", type=int, help="Number of retries for Plex connection")
     parser.add_argument("--interval", type=int, help="Check interval in seconds")
-    parser.add_argument("--exact-hour", action="store_true", help="Run check exactly on the hour")
 
     args = parser.parse_args()
 
@@ -568,7 +561,6 @@ def main() -> None:
     NOTIFY_TV = args.notify_tv or os.getenv("NOTIFY_TV", "true").lower() == "true"
     DATA_FILE = args.data_file or os.getenv("DATA_FILE", "processed_media.json")
     PLEX_CONNECT_RETRY = args.retry or int(os.getenv("PLEX_CONNECT_RETRY", "3"))
-    EXACT_HOUR_CHECK = args.exact_hour or os.getenv("EXACT_HOUR_CHECK", "false").lower() == "true"
 
     # Validate required configuration
     if not DISCORD_TOKEN:
@@ -590,9 +582,6 @@ def main() -> None:
     # Start the bot
     try:
         logger.info(f"Starting Plex Discord Bot with check interval: {CHECK_INTERVAL} seconds")
-        if EXACT_HOUR_CHECK:
-            logger.info("Exact hour checking enabled")
-
         bot.run(DISCORD_TOKEN)
     except Exception as e:
         logger.error(f"Error starting bot: {e}")
