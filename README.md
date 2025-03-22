@@ -50,7 +50,7 @@ To deploy on a Synology NAS using Docker Container Manager:
    - Download the repository files:
 
      ```bash
-     curl -L https://github.com/your-username/discord-plex-announcer/archive/refs/heads/main.zip -o main.zip
+     curl -L https://github.com/cellwebb/discord-plex-announcer/archive/refs/heads/main.zip -o main.zip
      unzip main.zip
      mv discord-plex-announcer-main/* .
      rm -rf discord-plex-announcer-main main.zip
@@ -59,21 +59,61 @@ To deploy on a Synology NAS using Docker Container Manager:
    - Copy and edit the environment file: `cp .env.example .env`
    - Edit the .env file with your values: `vi .env`
 
-3. **Launch in Docker Container Manager**:
+3. **Build and Deploy Options**:
+
+   **Option 1: Build directly on Synology**
+
+   - If your Synology has enough resources, you can build the Docker image directly:
+
+     ```bash
+     docker-compose build
+     docker-compose up -d
+     ```
+
+   **Option 2: Use Docker Container Manager UI**
 
    - Open Docker Container Manager in DSM
-   - Go to "Registry" → Search for "plex-discord-bot" (if you've pushed the image to Docker Hub) OR
    - Go to "Image" → "Add" → "Add From URL" → Enter the GitHub repository URL
    - Alternatively, use "Container" → "Create" → "Import from docker-compose.yml" and browse to the docker-compose.yml file in your created directory
 
-4. **Volume Mapping**:
+   **Option 3: Build locally and transfer to Synology**
+
+   - On your local machine, build the image:
+
+     ```bash
+     make docker-build
+     ```
+
+   - Save the image:
+
+     ```bash
+     docker save plex-discord-bot:latest > plex-discord-bot.tar
+     ```
+
+   - Transfer to Synology and load:
+
+     ```bash
+     scp plex-discord-bot.tar username@synology_ip:/volume1/docker/
+     ssh username@synology_ip
+     cd /volume1/docker
+     docker load < plex-discord-bot.tar
+     cd plex-discord-bot
+     docker-compose up -d
+     ```
+
+4. **Volume Mapping**
 
    - Map `/volume1/docker/plex-discord-bot` to `/app` inside the container to persist data
 
-5. **Environment Variables**:
+5. **Environment Variables**
+
    - Ensure all required environment variables from the .env file are added to the container configuration
 
-For troubleshooting, check the container logs through the Docker Container Manager interface.
+For troubleshooting, check the container logs through the Docker Container Manager interface or run:
+
+```bash
+docker-compose logs -f
+```
 
 ## Manual Installation
 
