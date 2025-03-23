@@ -6,7 +6,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
-      - ./:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - CHANNEL_ID=${CHANNEL_ID}
@@ -17,11 +18,11 @@ services:
       - NOTIFY_MOVIES=${NOTIFY_MOVIES}
       - NOTIFY_TV=${NOTIFY_TV}
       - CHECK_INTERVAL=${CHECK_INTERVAL}
-      - DATA_FILE=${DATA_FILE}
+      - DATA_FILE=${DATA_FILE:-data/processed_media.json}
       - PLEX_CONNECT_RETRY=${PLEX_CONNECT_RETRY:-3}
       - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
     healthcheck:
-      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/app/plex_discord_bot.log') else 1)"]
+      test: ["CMD", "python", "healthcheck.py"]
       interval: 1m
       timeout: 10s
       retries: 3

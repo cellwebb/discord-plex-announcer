@@ -1,8 +1,8 @@
-.PHONY: help setup venv install test lint format run docker-build docker-run docker-stop docker-logs ghcr-pull ghcr-up ghcr-down ghcr-logs clean
+.PHONY: help setup venv install test lint format run run-module docker-build docker-run docker-stop docker-logs ghcr-pull ghcr-up ghcr-down ghcr-logs clean pre-commit pre-commit-run
 
 # Default Python executable and virtual environment path
 PYTHON := python3
-VENV := venv
+VENV := .venv
 VENV_PYTHON := $(VENV)/bin/python
 VENV_PIP := $(VENV)/bin/pip
 
@@ -22,19 +22,29 @@ install: ## Install dependencies in the active environment
 	pip install -r requirements.txt
 
 test: ## Run tests with pytest
-	$(VENV_PYTHON) -m pytest -v
+	$(VENV_PYTHON) -m pytest -v plex_announcer/tests/
 
 test-cov: ## Run tests with coverage report
-	$(VENV_PYTHON) -m pytest --cov=. --cov-report=term
+	$(VENV_PYTHON) -m pytest --cov=plex_announcer --cov-report=term plex_announcer/tests/
 
 lint: ## Check code style with flake8
-	$(VENV_PYTHON) -m flake8 *.py
+	$(VENV_PYTHON) -m flake8 plex_announcer/ *.py
 
 format: ## Format code with black
-	$(VENV_PYTHON) -m black *.py
+	$(VENV_PYTHON) -m black plex_announcer/ *.py
 
 run: ## Run the Discord bot locally
-	$(VENV_PYTHON) plex_discord_bot.py
+	$(VENV_PYTHON) run.py
+
+run-module: ## Run the Discord bot directly as a module
+	$(VENV_PYTHON) -m plex_announcer
+
+pre-commit: ## Install pre-commit hooks
+	$(VENV_PYTHON) -m pip install pre-commit
+	$(VENV_PYTHON) -m pre-commit install
+
+pre-commit-run: ## Run pre-commit hooks on all files
+	$(VENV_PYTHON) -m pre-commit run --all-files
 
 # Docker commands
 docker-build: ## Build the Docker image
