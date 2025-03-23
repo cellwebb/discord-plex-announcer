@@ -52,6 +52,12 @@ async def main():
         logger.error("CHANNEL_ID is required. Please set it in your .env file.")
         return
     
+    logger.info(f"Discord token: {discord_token[:5]}...{discord_token[-5:] if len(discord_token) > 10 else ''}")
+    logger.info(f"Channel ID: {channel_id}")
+    logger.info(f"Notify Movies: {notify_movies}")
+    logger.info(f"Notify TV: {notify_tv}")
+    logger.info(f"Data file: {data_file}")
+    
     bot = DiscordBot(
         token=discord_token,
         channel_id=int(channel_id),
