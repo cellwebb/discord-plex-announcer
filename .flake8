@@ -1,4 +1,6 @@
 [flake8]
 max-line-length = 100
 exclude = .git,__pycache__,build,dist,venv
-ignore = E203,W503  # Conflicts with black formatter
+ignore = E203,W503
+
+# E203 and W503 are ignored because they conflict with black formatter
