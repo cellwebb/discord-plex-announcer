@@ -6,7 +6,8 @@ A Discord bot that sends notifications to Discord when new media is added to you
 
 * Monitors Plex libraries for new movies and TV shows
 * Sends formatted announcements to a Discord channel
-* Selective notifications for TV shows (recently aired or first episodes)
+* Separate notification options for new TV shows and recently aired episodes
+* Configurable timeframe for considering episodes as "recently aired"
 * Groups episodes from the same show to reduce notification clutter
 * Rich Discord embeds with media details and metadata
 * Admin commands for status, health checks and manual refresh
@@ -75,7 +76,9 @@ Configuration is done via environment variables:
 | MOVIE_LIBRARY | Name of your Plex movie library | Movies |
 | TV_LIBRARY | Name of your Plex TV library | TV Shows |
 | NOTIFY_MOVIES | Whether to notify for new movies | true |
-| NOTIFY_TV | Whether to notify for new TV episodes | true |
+| NOTIFY_NEW_SHOWS | Whether to notify for new TV shows (first episode) | true |
+| NOTIFY_RECENT_EPISODES | Whether to notify for recently aired episodes | true |
+| RECENT_EPISODE_DAYS | Days to consider an episode as "recently aired" | 30 |
 | DATA_FILE | Path to store processed media data | data/processed_media.json |
 | LOGGING_LEVEL | Log level (DEBUG, INFO, WARNING, ERROR) | INFO |
 | PLEX_CONNECT_RETRY | Number of retries for Plex connection | 3 |

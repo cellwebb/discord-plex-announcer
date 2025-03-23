@@ -16,9 +16,11 @@ services:
       - MOVIE_LIBRARY=${MOVIE_LIBRARY}
       - TV_LIBRARY=${TV_LIBRARY}
       - NOTIFY_MOVIES=${NOTIFY_MOVIES}
-      - NOTIFY_TV=${NOTIFY_TV}
+      - NOTIFY_NEW_SHOWS=${NOTIFY_NEW_SHOWS:-true}
+      - NOTIFY_RECENT_EPISODES=${NOTIFY_RECENT_EPISODES:-true}
+      - RECENT_EPISODE_DAYS=${RECENT_EPISODE_DAYS:-30}
       - CHECK_INTERVAL=${CHECK_INTERVAL}
-      - DATA_FILE=${DATA_FILE:-data/processed_media.json}
+      - DATA_FILE=data/processed_media.json
       - PLEX_CONNECT_RETRY=${PLEX_CONNECT_RETRY:-3}
       - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
     healthcheck:
