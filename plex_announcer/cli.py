@@ -26,10 +26,6 @@ def signal_handler(sig, frame):
 
 async def main():
     """Main entry point for the Plex Discord bot."""
-    # Load environment variables
-    load_dotenv()
-
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description="Plex Discord Bot")
     parser.add_argument("--token", help="Discord bot token")
     parser.add_argument(
@@ -63,7 +59,8 @@ async def main():
     )
     args = parser.parse_args()
 
-    # Configure with environment variables or command-line args
+    load_dotenv()
+
     discord_token: Optional[str] = args.token or os.getenv("DISCORD_TOKEN")
     channel_id: int = args.channel or int(os.getenv("CHANNEL_ID", "0"))
     movie_channel_id: Optional[int] = args.movie_channel or (
@@ -94,26 +91,22 @@ async def main():
     recent_episode_days: int = int(os.getenv("RECENT_EPISODE_DAYS", "30"))
     plex_connect_retry: int = int(os.getenv("PLEX_CONNECT_RETRY", "3"))
 
-    # Validate required parameters
     if not discord_token:
         print(
             "Error: Discord token not provided. Set DISCORD_TOKEN env var or use --token"
         )
         sys.exit(1)
-
     if not plex_token:
         print(
             "Error: Plex token not provided. Set PLEX_TOKEN env var or use --plex-token"
         )
         sys.exit(1)
-
     if channel_id == 0:
         print(
             "Error: Discord channel ID not provided. Set CHANNEL_ID env var or use --channel"
         )
         sys.exit(1)
 
-    # Configure logging
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
     logging.basicConfig(
         level=numeric_level,
@@ -121,11 +114,9 @@ async def main():
         handlers=[logging.FileHandler("plex_discord_bot.log"), logging.StreamHandler()],
     )
 
-    # Configure signal handling
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # Set up Plex monitor
     logger.info(f"Connecting to Plex server at {plex_url}")
     plex_monitor = PlexMonitor(
         base_url=plex_url,
@@ -133,12 +124,9 @@ async def main():
         connect_retry=plex_connect_retry,
     )
 
-    # Check Plex connection
     if not plex_monitor.plex:
         logger.error("Failed to connect to Plex. Exiting.")
         sys.exit(1)
-
-    # Set up Discord bot
     logger.info("Setting up Discord bot")
     logger.info(f"Default channel ID: {channel_id}")
     if movie_channel_id:
