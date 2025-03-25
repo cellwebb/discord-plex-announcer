@@ -5,7 +5,6 @@ import os
 from datetime import datetime
 
 import discord
-import requests
 from plexapi.server import PlexServer
 
 from plex_announcer.utils.logging_config import configure_logging
@@ -108,14 +107,14 @@ async def run_healthcheck():
     load_dotenv()
 
     discord_token = os.getenv("DISCORD_TOKEN")
-    plex_url = os.getenv("PLEX_URL", "http://localhost:32400")
+    plex_base_url = os.getenv("PLEX_BASE_URL", "http://localhost:32400")
     plex_token = os.getenv("PLEX_TOKEN")
     data_file = os.getenv("DATA_FILE", "processed_media.json")
 
     logger.info("Starting healthcheck")
 
     discord_ok = await check_discord_connection(discord_token)
-    plex_ok = check_plex_connection(plex_url, plex_token)
+    plex_ok = check_plex_connection(plex_base_url, plex_token)
     data_ok = check_data_file(data_file)
 
     all_ok = discord_ok and plex_ok and data_ok

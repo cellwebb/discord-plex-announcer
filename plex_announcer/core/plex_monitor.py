@@ -29,7 +29,7 @@ class PlexMonitor:
         connect_retry: int = 3,
     ):
         """Initialize the Plex monitor with server URL and authentication token."""
-        self.plex_url: str = base_url
+        self.plex_base_url: str = base_url
         self.plex_token: str = token
         self.movie_library: str = movie_library
         self.tv_library: str = tv_library
@@ -39,13 +39,13 @@ class PlexMonitor:
 
     def connect(self) -> bool:
         """Establish connection to the Plex server."""
-        logger.info(f"Connecting to Plex server at {self.plex_url}")
+        logger.info(f"Connecting to Plex server at {self.plex_base_url}")
 
         for attempt in range(self.connect_retry):
             try:
                 logger.info(f"Connection attempt {attempt + 1}/{self.connect_retry}")
                 # Set timeout for initial connection only
-                self.plex = PlexServer(self.plex_url, self.plex_token, timeout=10)
+                self.plex = PlexServer(self.plex_base_url, self.plex_token, timeout=10)
                 logger.info(
                     f"Successfully connected to Plex server: {self.plex.friendlyName}"
                 )
@@ -136,7 +136,7 @@ class PlexMonitor:
                     if movie.addedAt > cutoff_date:
                         poster_url: Optional[str] = None
                         if movie.thumb:
-                            poster_url = f"{self.plex_url}{movie.thumb}?X-Plex-Token={self.plex_token}"
+                            poster_url = f"{self.plex_base_url}{movie.thumb}?X-Plex-Token={self.plex_token}"
 
                         # Get movie attributes safely
                         content_rating = "Not Rated"
@@ -237,7 +237,7 @@ class PlexMonitor:
                     if episode.addedAt > cutoff_date:
                         poster_url: Optional[str] = None
                         if episode.thumb:
-                            poster_url = f"{self.plex_url}{episode.thumb}?X-Plex-Token={self.plex_token}"
+                            poster_url = f"{self.plex_base_url}{episode.thumb}?X-Plex-Token={self.plex_token}"  # noqa: E501
 
                         show_poster_url: Optional[str] = None
                         show = None
@@ -246,7 +246,7 @@ class PlexMonitor:
                         try:
                             show = episode.show()
                             if hasattr(show, "thumb") and show.thumb:
-                                show_poster_url = f"{self.plex_url}{show.thumb}?X-Plex-Token={self.plex_token}"
+                                show_poster_url = f"{self.plex_base_url}{show.thumb}?X-Plex-Token={self.plex_token}"  # noqa: E501
                             if hasattr(show, "contentRating"):
                                 show_content_rating = show.contentRating
                         except (ConnectionError, ReadTimeout, socket.timeout) as e:

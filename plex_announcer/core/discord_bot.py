@@ -13,9 +13,7 @@ from discord.ext import commands, tasks
 
 from plex_announcer.utils.formatting import format_duration
 from plex_announcer.utils.media_storage import (load_last_check_time,
-                                                load_processed_media,
-                                                save_last_check_time,
-                                                save_processed_media)
+                                                save_last_check_time)
 
 logger = logging.getLogger("plex_discord_bot")
 
@@ -29,7 +27,6 @@ class PlexDiscordBot:
         channel_id: int,
         plex_monitor,
         check_interval: int,
-        data_file: str,
         notify_movies: bool = True,
         notify_new_shows: bool = True,
         notify_recent_episodes: bool = True,
@@ -58,14 +55,8 @@ class PlexDiscordBot:
         self.notify_recent_episodes = notify_recent_episodes
         self.recent_episode_days = recent_episode_days
         self.check_interval = check_interval
-        self.data_file = data_file
         self.processed_media = set()
         self.start_time = time.time()
-
-        # Create timestamp file path based on data_file
-        self.timestamp_file = os.path.join(
-            os.path.dirname(self.data_file), "last_check_time.txt"
-        )
 
         self.last_check_time: Optional[datetime] = None
 
@@ -76,9 +67,6 @@ class PlexDiscordBot:
 
         # Register commands and events
         self._setup_bot()
-
-        # Load processed media from storage
-        self.processed_media = load_processed_media(self.data_file)
 
         # Load last check time
         self.last_check_time = load_last_check_time(self.timestamp_file)
@@ -346,7 +334,7 @@ class PlexDiscordBot:
             if plex_connected:
                 embed.add_field(
                     name="Plex Connection",
-                    value=f"✅ Connected to {self.plex_monitor.plex_url}",
+                    value=f"✅ Connected to {self.plex_monitor.plex_base_url}",
                     inline=False,
                 )
             else:
@@ -551,9 +539,6 @@ class PlexDiscordBot:
             elif isinstance(item, dict) and item.get("type") == "tv_group":
                 embed = self._create_episode_group_embed(item)
                 await channel.send(embed=embed)
-
-        # Save processed media to file
-        save_processed_media(self.processed_media, self.data_file)
 
         # Update and save the last check time
         self.last_check_time = current_check_time

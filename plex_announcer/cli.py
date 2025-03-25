@@ -57,13 +57,12 @@ async def main():
         if os.getenv("DISCORD_RECENT_EPISODES_CHANNEL_ID")
         else None
     )
-    plex_url: str = os.getenv("PLEX_BASE_URL")
+    plex_base_url: str = os.getenv("PLEX_BASE_URL")
     plex_token: Optional[str] = os.getenv("PLEX_TOKEN")
     check_interval: int = int(os.getenv("CHECK_INTERVAL", "3600"))
     movie_library: str = os.getenv("PLEX_MOVIE_LIBRARY", "Movies")
     tv_library: str = os.getenv("PLEX_TV_LIBRARY", "TV Shows")
     log_level: str = os.getenv("LOGGING_LEVEL", "INFO")
-    data_file: str = os.getenv("DATA_FILE", "processed_media.json")
     notify_movies: bool = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
     notify_new_shows: bool = os.getenv("NOTIFY_NEW_SHOWS", "true").lower() == "true"
     notify_recent_episodes: bool = (
@@ -87,9 +86,9 @@ async def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    logger.info(f"Connecting to Plex server at {plex_url}")
+    logger.info(f"Connecting to Plex server at {plex_base_url}")
     plex_monitor = PlexMonitor(
-        base_url=plex_url,
+        base_url=plex_base_url,
         token=plex_token,
         connect_retry=plex_connect_retry,
     )
@@ -117,7 +116,6 @@ async def main():
         notify_recent_episodes=notify_recent_episodes,
         recent_episode_days=recent_episode_days,
         check_interval=check_interval,
-        data_file=data_file,
         movie_channel_id=movie_channel_id,
         new_shows_channel_id=new_shows_channel_id,
         recent_episodes_channel_id=recent_episodes_channel_id,

@@ -22,17 +22,17 @@ def main():
     load_dotenv()
 
     # Check for required environment variables
-    plex_url = os.getenv("PLEX_URL")
+    plex_base_url = os.getenv("PLEX_BASE_URL")
     plex_token = os.getenv("PLEX_TOKEN")
 
-    if not plex_url or not plex_token:
+    if not plex_base_url or not plex_token:
         print("ERROR: Missing required Plex configuration")
         sys.exit(1)
 
     # Try to connect to Plex
     try:
         plex_monitor = PlexMonitor(
-            plex_url=plex_url, plex_token=plex_token, connect_retry=1
+            plex_base_url=plex_base_url, plex_token=plex_token, connect_retry=1
         )
 
         if not plex_monitor.connect():
