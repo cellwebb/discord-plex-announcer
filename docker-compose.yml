@@ -8,21 +8,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - CHANNEL_ID=${CHANNEL_ID}
-      - PLEX_URL=${PLEX_URL}
-      - PLEX_TOKEN=${PLEX_TOKEN}
-      - MOVIE_LIBRARY=${MOVIE_LIBRARY}
-      - TV_LIBRARY=${TV_LIBRARY}
-      - NOTIFY_MOVIES=${NOTIFY_MOVIES}
-      - NOTIFY_NEW_SHOWS=${NOTIFY_NEW_SHOWS:-true}
-      - NOTIFY_RECENT_EPISODES=${NOTIFY_RECENT_EPISODES:-true}
-      - RECENT_EPISODE_DAYS=${RECENT_EPISODE_DAYS:-30}
-      - CHECK_INTERVAL=${CHECK_INTERVAL}
-      - DATA_FILE=data/processed_media.json
-      - PLEX_CONNECT_RETRY=${PLEX_CONNECT_RETRY:-3}
-      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+      - ./.env:/app/.env
     healthcheck:
       test: ["CMD", "python", "healthcheck.py"]
       interval: 1m

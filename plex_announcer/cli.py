@@ -3,6 +3,7 @@ Command-line interface for Plex Discord Announcer.
 """
 
 import argparse
+import asyncio
 import logging
 import os
 import signal
@@ -14,14 +15,16 @@ from dotenv import load_dotenv
 from plex_announcer.core.discord_bot import PlexDiscordBot
 from plex_announcer.core.plex_monitor import PlexMonitor
 
+logger = logging.getLogger("plex_discord_bot")
+
 
 def signal_handler(sig, frame):
     """Handle termination signals for clean shutdown."""
-    print("\nShutting down...")
+    logger.info("Received termination signal, shutting down...")
     sys.exit(0)
 
 
-def main():
+async def main():
     """Main entry point for the Plex Discord bot."""
     # Load environment variables
     load_dotenv()
@@ -117,7 +120,6 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.FileHandler("plex_discord_bot.log"), logging.StreamHandler()],
     )
-    logger = logging.getLogger("plex_discord_bot")
 
     # Configure signal handling
     signal.signal(signal.SIGINT, signal_handler)
@@ -126,8 +128,8 @@ def main():
     # Set up Plex monitor
     logger.info(f"Connecting to Plex server at {plex_url}")
     plex_monitor = PlexMonitor(
-        plex_url=plex_url,
-        plex_token=plex_token,
+        base_url=plex_url,
+        token=plex_token,
         connect_retry=plex_connect_retry,
     )
 
@@ -164,8 +166,8 @@ def main():
     )
 
     logger.info("Starting Discord bot")
-    bot.run()
+    await bot.run()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

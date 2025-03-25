@@ -78,6 +78,14 @@ class PlexDiscordBot:
             logger.info(f"Logged in as {self.bot.user.name} ({self.bot.user.id})")
             logger.info(f"Connected to {len(self.bot.guilds)} guilds")
 
+            # Debug: List all guilds and channels
+            for guild in self.bot.guilds:
+                logger.info(f"Guild: {guild.name} (ID: {guild.id})")
+                logger.info(f"Channels in {guild.name}:")
+                for channel in guild.channels:
+                    if isinstance(channel, discord.TextChannel):
+                        logger.info(f"  - #{channel.name} (ID: {channel.id})")
+
             default_channel = self.bot.get_channel(self.channel_id)
             if default_channel:
                 logger.info(
@@ -124,11 +132,11 @@ class PlexDiscordBot:
                 )
                 if recent_episodes_channel:
                     logger.info(
-                        f"Found recent episodes announcement channel: #{recent_episodes_channel.name}"
+                        f"Found recent episodes announcement channel: #{recent_episodes_channel.name}"  # noqa: E501
                     )
                 else:
                     logger.error(
-                        f"Could not find recent episodes channel with ID {self.recent_episodes_channel_id}"
+                        f"Could not find recent episodes channel with ID {self.recent_episodes_channel_id}"  # noqa: E501
                     )
 
         @self.bot.command(name="check")
@@ -511,7 +519,7 @@ class PlexDiscordBot:
         else:
             title = f"New Episode Added: {episode['show_title']}"
 
-        description = f"**S{episode['season_number']}E{episode['episode_number']} - {episode['title']}**\n\n{episode.get('summary', 'No summary available')}"
+        description = f"**S{episode['season_number']}E{episode['episode_number']} - {episode['title']}**\n\n{episode.get('summary', 'No summary available')}"  # noqa: E501
 
         embed = discord.Embed(
             title=title,

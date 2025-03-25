@@ -89,7 +89,7 @@ async def main():
         logger.info(f"Created data directory: {data_dir}")
 
     logger.info(
-        f"Discord token: {discord_token[:5]}...{discord_token[-5:] if len(discord_token) > 10 else ''}"
+        f"Discord token: {discord_token[:5]}...{discord_token[-5:] if len(discord_token) > 10 else ''}"  # noqa: E501
     )
     logger.info(f"Channel ID: {channel_id}")
     logger.info(f"Notify Movies: {notify_movies}")
