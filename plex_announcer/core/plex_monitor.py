@@ -38,12 +38,14 @@ class PlexMonitor:
     def connect(self) -> bool:
         """Establish connection to the Plex server."""
         logger.info(f"Connecting to Plex server at {self.plex_url}")
-        
+
         for attempt in range(self.connect_retry):
             try:
                 logger.info(f"Connection attempt {attempt + 1}/{self.connect_retry}")
                 self.plex = PlexServer(self.plex_url, self.plex_token)
-                logger.info(f"Successfully connected to Plex server: {self.plex.friendlyName}")
+                logger.info(
+                    f"Successfully connected to Plex server: {self.plex.friendlyName}"
+                )
                 return True
             except Unauthorized as e:
                 logger.error(f"Authentication failed for Plex server: {e}")
@@ -58,8 +60,10 @@ class PlexMonitor:
                 if attempt < self.connect_retry - 1:
                     logger.info(f"Retrying in 5 seconds...")
                     time.sleep(5)
-        
-        logger.error(f"Failed to connect to Plex server after {self.connect_retry} attempts")
+
+        logger.error(
+            f"Failed to connect to Plex server after {self.connect_retry} attempts"
+        )
         return False
 
     def get_library(self, library_name: str) -> Optional[LibrarySection]:
@@ -91,7 +95,9 @@ class PlexMonitor:
                 return []
 
             cutoff_date: datetime = datetime.now() - timedelta(days=days)
-            recent_movies: List[Movie] = library.search(libtype="movie", sort="addedAt:desc")
+            recent_movies: List[Movie] = library.search(
+                libtype="movie", sort="addedAt:desc"
+            )
 
             new_movies: List[Dict[str, Any]] = []
             for movie in recent_movies:
@@ -108,15 +114,22 @@ class PlexMonitor:
                             "year": movie.year,
                             "added_at": movie.addedAt.isoformat(),
                             "summary": movie.summary,
-                            "content_rating": getattr(movie, "contentRating", "Not Rated"),
+                            "content_rating": getattr(
+                                movie, "contentRating", "Not Rated"
+                            ),
                             "rating": getattr(movie, "rating", None),
                             "poster_url": poster_url,
                             "duration": movie.duration,
-                            "genres": [genre.tag for genre in getattr(movie, "genres", [])],
-                            "directors": [
-                                director.tag for director in getattr(movie, "directors", [])
+                            "genres": [
+                                genre.tag for genre in getattr(movie, "genres", [])
                             ],
-                            "actors": [actor.tag for actor in getattr(movie, "roles", [])][:3],
+                            "directors": [
+                                director.tag
+                                for director in getattr(movie, "directors", [])
+                            ],
+                            "actors": [
+                                actor.tag for actor in getattr(movie, "roles", [])
+                            ][:3],
                         }
                     )
                 else:
@@ -146,19 +159,18 @@ class PlexMonitor:
                 if episode.addedAt > cutoff_date:
                     poster_url: Optional[str] = None
                     if episode.thumb:
-                        poster_url = (
-                            f"{self.plex_url}{episode.thumb}?X-Plex-Token={self.plex_token}"
-                        )
-                    
+                        poster_url = f"{self.plex_url}{episode.thumb}?X-Plex-Token={self.plex_token}"
+
                     show_poster_url: Optional[str] = None
                     if hasattr(episode.show(), "thumb") and episode.show().thumb:
-                        show_poster_url = (
-                            f"{self.plex_url}{episode.show().thumb}?X-Plex-Token={self.plex_token}"
-                        )
-                    
+                        show_poster_url = f"{self.plex_url}{episode.show().thumb}?X-Plex-Token={self.plex_token}"
+
                     # Get air date if available
                     air_date = None
-                    if hasattr(episode, "originallyAvailableAt") and episode.originallyAvailableAt:
+                    if (
+                        hasattr(episode, "originallyAvailableAt")
+                        and episode.originallyAvailableAt
+                    ):
                         air_date = episode.originallyAvailableAt.isoformat()
 
                     new_episodes.append(

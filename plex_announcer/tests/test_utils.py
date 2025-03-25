@@ -1,12 +1,14 @@
 """Tests for utility functions."""
 
-import os
-import pytest
 import json
-from unittest.mock import patch, mock_open
+import os
+from unittest.mock import mock_open, patch
+
+import pytest
 
 from plex_announcer.utils.formatting import format_duration
-from plex_announcer.utils.media_storage import load_processed_media, save_processed_media
+from plex_announcer.utils.media_storage import (load_processed_media,
+                                                save_processed_media)
 
 
 @pytest.fixture
@@ -61,7 +63,7 @@ def test_load_processed_media_no_file(test_data_file):
     # Make sure file doesn't exist
     if os.path.exists(test_data_file):
         os.remove(test_data_file)
-        
+
     # Load from non-existent file should return empty set
     loaded_media = load_processed_media(test_data_file)
     assert loaded_media == set()
@@ -69,7 +71,7 @@ def test_load_processed_media_no_file(test_data_file):
 
 def test_load_processed_media_with_error():
     """Test loading processed media with file read error."""
-    with patch('builtins.open', mock_open()) as mock_file:
+    with patch("builtins.open", mock_open()) as mock_file:
         mock_file.side_effect = IOError("Mock IO Error")
         loaded_media = load_processed_media("dummy.json")
         assert loaded_media == set()
@@ -77,7 +79,7 @@ def test_load_processed_media_with_error():
 
 def test_save_processed_media_with_error(sample_media):
     """Test saving processed media with file write error."""
-    with patch('builtins.open', mock_open()) as mock_file:
+    with patch("builtins.open", mock_open()) as mock_file:
         mock_file.side_effect = IOError("Mock IO Error")
         # Should not raise exception but log error
         save_processed_media(sample_media, "dummy.json")

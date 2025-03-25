@@ -5,6 +5,16 @@ All notable changes to the Discord Plex Announcer will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Support for sending different types of announcements to different Discord channels:
+  - `MOVIE_CHANNEL_ID`: Channel for movie announcements
+  - `NEW_SHOWS_CHANNEL_ID`: Channel for new TV show announcements
+  - `RECENT_EPISODES_CHANNEL_ID`: Channel for recent episode announcements
+- If specialized channels are not specified, announcements will be sent to the default channel
+
 ## [0.2.0] - 2025-03-22
 
 ### Added

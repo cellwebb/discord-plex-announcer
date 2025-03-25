@@ -1,8 +1,9 @@
 """Tests for Plex monitor functionality."""
 
-import pytest
-from unittest.mock import MagicMock, patch
 from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from plex_announcer.core.plex_monitor import PlexMonitor
 
@@ -27,7 +28,7 @@ def test_plex_monitor_connect_unauthorized(mock_plex_server):
     """Test PlexMonitor connection with unauthorized error."""
     mock_server, _ = mock_plex_server
     mock_server.side_effect = Exception("Unauthorized")
-    
+
     monitor = PlexMonitor("http://test:32400", "test_token")
     assert not monitor.connect()
 
@@ -35,15 +36,15 @@ def test_plex_monitor_connect_unauthorized(mock_plex_server):
 def test_plex_monitor_get_library(mock_plex_server):
     """Test getting a library from PlexMonitor."""
     _, mock_instance = mock_plex_server
-    
+
     # Set up the mock library
     mock_library = MagicMock()
     mock_library.section.return_value = MagicMock(name="Movies")
     mock_instance.library = mock_library
-    
+
     monitor = PlexMonitor("http://test:32400", "test_token")
     library = monitor.get_library("Movies")
-    
+
     assert library is not None
     mock_library.section.assert_called_once_with("Movies")
 
@@ -51,22 +52,22 @@ def test_plex_monitor_get_library(mock_plex_server):
 def test_plex_monitor_get_library_not_found(mock_plex_server):
     """Test getting a non-existent library from PlexMonitor."""
     _, mock_instance = mock_plex_server
-    
+
     # Set up the mock library to raise NotFound
     mock_library = MagicMock()
     mock_library.section.side_effect = Exception("NotFound")
     mock_instance.library = mock_library
-    
+
     monitor = PlexMonitor("http://test:32400", "test_token")
     library = monitor.get_library("NonExistentLibrary")
-    
+
     assert library is None
 
 
 def test_get_recently_added_movies(mock_plex_server):
     """Test getting recently added movies."""
     _, mock_instance = mock_plex_server
-    
+
     # Set up mock library and movies
     mock_library = MagicMock()
     mock_movie = MagicMock()
@@ -79,27 +80,27 @@ def test_get_recently_added_movies(mock_plex_server):
     mock_movie.rating = 8.5
     mock_movie.thumb = "/thumb/path"
     mock_movie.duration = 7200000  # 2 hours in ms
-    
+
     # Set up genres, directors, and actors
     mock_genre = MagicMock()
     mock_genre.tag = "Action"
     mock_movie.genres = [mock_genre]
-    
+
     mock_director = MagicMock()
     mock_director.tag = "Test Director"
     mock_movie.directors = [mock_director]
-    
+
     mock_actor = MagicMock()
     mock_actor.tag = "Test Actor"
     mock_movie.roles = [mock_actor]
-    
+
     # Configure library search to return our mock movie
     mock_library.search.return_value = [mock_movie]
     mock_instance.library.section.return_value = mock_library
-    
+
     monitor = PlexMonitor("http://test:32400", "test_token")
     movies = monitor.get_recently_added_movies("Movies")
-    
+
     assert len(movies) == 1
     assert movies[0]["title"] == "Test Movie"
     assert movies[0]["year"] == 2023
@@ -111,11 +112,11 @@ def test_get_recently_added_movies(mock_plex_server):
 def test_get_recently_added_episodes(mock_plex_server):
     """Test getting recently added TV episodes."""
     _, mock_instance = mock_plex_server
-    
+
     # Set up mock library and episode
     mock_library = MagicMock()
     mock_episode = MagicMock()
-    
+
     # Essential fields needed by the PlexMonitor.get_recently_added_episodes method
     mock_episode.key = "/library/metadata/12345"
     mock_episode.title = "Test Episode"
@@ -127,14 +128,14 @@ def test_get_recently_added_episodes(mock_plex_server):
     mock_episode.thumb = "/thumb/path"
     mock_episode.grandparentThumb = "/show/thumb/path"
     mock_episode.duration = 1800000  # 30 minutes in ms
-    
+
     # Configure library search to return our mock episode
     mock_library.searchEpisodes.return_value = [mock_episode]
     mock_instance.library.section.return_value = mock_library
-    
+
     monitor = PlexMonitor("http://test:32400", "test_token")
     episodes = monitor.get_recently_added_episodes("TV Shows")
-    
+
     assert len(episodes) == 1
     assert episodes[0]["title"] == "Test Episode"
     assert episodes[0]["show_title"] == "Test Show"
@@ -145,14 +146,14 @@ def test_get_recently_added_episodes(mock_plex_server):
 def test_plex_monitor_get_recently_added_movies_no_library(mock_plex_server):
     """Test getting movies when library doesn't exist."""
     _, mock_instance = mock_plex_server
-    
+
     # Set up mock with no library
     mock_instance.library.section.return_value = None
-    
+
     monitor = PlexMonitor("http://test:32400", "test_token")
-    with patch.object(monitor, 'get_library', return_value=None):
+    with patch.object(monitor, "get_library", return_value=None):
         movies = monitor.get_recently_added_movies("NonExistentLibrary")
-    
+
     assert isinstance(movies, list)
     assert len(movies) == 0
 
@@ -160,10 +161,10 @@ def test_plex_monitor_get_recently_added_movies_no_library(mock_plex_server):
 def test_plex_monitor_get_recently_added_episodes_no_library(mock_plex_server):
     """Test getting episodes when library doesn't exist."""
     _, _ = mock_plex_server
-    
+
     monitor = PlexMonitor("http://test:32400", "test_token")
-    with patch.object(monitor, 'get_library', return_value=None):
+    with patch.object(monitor, "get_library", return_value=None):
         episodes = monitor.get_recently_added_episodes("NonExistentLibrary")
-    
+
     assert isinstance(episodes, list)
     assert len(episodes) == 0

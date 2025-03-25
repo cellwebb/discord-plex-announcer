@@ -1,6 +1,6 @@
 """Setup script for plex_announcer package."""
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="plex_announcer",
