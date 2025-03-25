@@ -174,3 +174,5 @@ cython_debug/
 .pypirc
 processed_media.json
 tv_show_buffer.json
+last_check_time.txt
+startup_complete.flag

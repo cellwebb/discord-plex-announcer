@@ -4,7 +4,8 @@ Discord bot implementation for sending Plex media notifications.
 
 import logging
 import os
-from datetime import datetime, time
+import time
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import discord
