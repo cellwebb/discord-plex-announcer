@@ -28,9 +28,7 @@ def configure_logging(log_file="plex_announcer.log"):
     logger.setLevel(numeric_level)
 
     # Create formatters
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Create console handler
     console_handler = logging.StreamHandler()
@@ -38,9 +36,7 @@ def configure_logging(log_file="plex_announcer.log"):
     console_handler.setFormatter(formatter)
 
     # Create file handler with rotation
-    file_handler = RotatingFileHandler(
-        log_file, maxBytes=5 * 1024 * 1024, backupCount=3  # 5 MB
-    )
+    file_handler = RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=3)  # 5 MB
     file_handler.setLevel(numeric_level)
     file_handler.setFormatter(formatter)
 

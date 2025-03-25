@@ -40,13 +40,13 @@ class PlexDiscordBot:
         """Initialize the Discord bot with configuration parameters."""
         self.token = token
         self.channel_id = channel_id  # Default channel for all announcements
-        self.movie_channel_id = (
-            movie_channel_id  # Specific channel for movie announcements
-        )
+        self.movie_channel_id = movie_channel_id  # Specific channel for movie announcements
         self.new_shows_channel_id = (
             new_shows_channel_id  # Specific channel for new show announcements
         )
-        self.recent_episodes_channel_id = recent_episodes_channel_id  # Specific channel for recent episode announcements
+        self.recent_episodes_channel_id = (
+            recent_episodes_channel_id  # Specific channel for recent episode announcements
+        )
         self.plex_monitor = plex_monitor
         self.movie_library = movie_library
         self.tv_library = tv_library
@@ -103,18 +103,14 @@ class PlexDiscordBot:
                 try:
                     with open(self.startup_flag_file, "w") as f:
                         f.write(f"Startup completed at {datetime.now().isoformat()}")
-                    logger.info(
-                        f"Created startup flag file at {self.startup_flag_file}"
-                    )
+                    logger.info(f"Created startup flag file at {self.startup_flag_file}")
                 except Exception as e:
                     logger.error(f"Failed to create startup flag file: {e}")
 
                 # Find default channel and send startup message
                 default_channel = self.bot.get_channel(self.channel_id)
                 if default_channel:
-                    logger.info(
-                        f"Found default announcement channel: #{default_channel.name}"
-                    )
+                    logger.info(f"Found default announcement channel: #{default_channel.name}")
 
                     # Send startup message
                     startup_embed = discord.Embed(
@@ -155,9 +151,7 @@ class PlexDiscordBot:
                     except Exception as e:
                         logger.error(f"Error during initial check: {e}", exc_info=True)
                 else:
-                    logger.error(
-                        f"Could not find default channel with ID {self.channel_id}"
-                    )
+                    logger.error(f"Could not find default channel with ID {self.channel_id}")
             else:
                 logger.info("Bot reconnected, skipping welcome message")
 
@@ -165,29 +159,21 @@ class PlexDiscordBot:
             if self.movie_channel_id:
                 movie_channel = self.bot.get_channel(self.movie_channel_id)
                 if movie_channel:
-                    logger.info(
-                        f"Found movie announcement channel: #{movie_channel.name}"
-                    )
+                    logger.info(f"Found movie announcement channel: #{movie_channel.name}")
                 else:
-                    logger.error(
-                        f"Could not find movie channel with ID {self.movie_channel_id}"
-                    )
+                    logger.error(f"Could not find movie channel with ID {self.movie_channel_id}")
 
             if self.new_shows_channel_id:
                 new_shows_channel = self.bot.get_channel(self.new_shows_channel_id)
                 if new_shows_channel:
-                    logger.info(
-                        f"Found new shows announcement channel: #{new_shows_channel.name}"
-                    )
+                    logger.info(f"Found new shows announcement channel: #{new_shows_channel.name}")
                 else:
                     logger.error(
                         f"Could not find new shows channel with ID {self.new_shows_channel_id}"
                     )
 
             if self.recent_episodes_channel_id:
-                recent_episodes_channel = self.bot.get_channel(
-                    self.recent_episodes_channel_id
-                )
+                recent_episodes_channel = self.bot.get_channel(self.recent_episodes_channel_id)
                 if recent_episodes_channel:
                     logger.info(
                         f"Found recent episodes announcement channel: #{recent_episodes_channel.name}"  # noqa: E501
@@ -265,39 +251,25 @@ class PlexDiscordBot:
 
             # Add channel information
             default_channel = self.bot.get_channel(self.channel_id)
-            default_channel_name = (
-                f"#{default_channel.name}" if default_channel else "Not found"
-            )
-            embed.add_field(
-                name="Default Channel", value=default_channel_name, inline=True
-            )
+            default_channel_name = f"#{default_channel.name}" if default_channel else "Not found"
+            embed.add_field(name="Default Channel", value=default_channel_name, inline=True)
 
             if self.movie_channel_id:
                 movie_channel = self.bot.get_channel(self.movie_channel_id)
-                movie_channel_name = (
-                    f"#{movie_channel.name}" if movie_channel else "Not found"
-                )
-                embed.add_field(
-                    name="Movie Channel", value=movie_channel_name, inline=True
-                )
+                movie_channel_name = f"#{movie_channel.name}" if movie_channel else "Not found"
+                embed.add_field(name="Movie Channel", value=movie_channel_name, inline=True)
 
             if self.new_shows_channel_id:
                 new_shows_channel = self.bot.get_channel(self.new_shows_channel_id)
                 new_shows_channel_name = (
                     f"#{new_shows_channel.name}" if new_shows_channel else "Not found"
                 )
-                embed.add_field(
-                    name="New Shows Channel", value=new_shows_channel_name, inline=True
-                )
+                embed.add_field(name="New Shows Channel", value=new_shows_channel_name, inline=True)
 
             if self.recent_episodes_channel_id:
-                recent_episodes_channel = self.bot.get_channel(
-                    self.recent_episodes_channel_id
-                )
+                recent_episodes_channel = self.bot.get_channel(self.recent_episodes_channel_id)
                 recent_episodes_name = (
-                    f"#{recent_episodes_channel.name}"
-                    if recent_episodes_channel
-                    else "Not found"
+                    f"#{recent_episodes_channel.name}" if recent_episodes_channel else "Not found"
                 )
                 embed.add_field(
                     name="Recent Episodes Channel",
@@ -305,9 +277,7 @@ class PlexDiscordBot:
                     inline=True,
                 )
 
-            embed.add_field(
-                name="Media Entries", value=str(len(self.processed_media)), inline=True
-            )
+            embed.add_field(name="Media Entries", value=str(len(self.processed_media)), inline=True)
 
             await ctx.send(embed=embed)
 
@@ -325,9 +295,7 @@ class PlexDiscordBot:
             )
 
             # Check Discord connection
-            embed.add_field(
-                name="Discord Connection", value="✅ Connected", inline=False
-            )
+            embed.add_field(name="Discord Connection", value="✅ Connected", inline=False)
 
             # Check Plex connection
             plex_connected = self.plex_monitor.connect()
@@ -404,9 +372,7 @@ class PlexDiscordBot:
 
         logger.info("Checking for new media...")
         if self.last_check_time:
-            logger.info(
-                f"Looking for content added since {self.last_check_time.isoformat()}"
-            )
+            logger.info(f"Looking for content added since {self.last_check_time.isoformat()}")
         else:
             logger.info("No previous check time, checking all recent content")
 
@@ -510,9 +476,7 @@ class PlexDiscordBot:
                 target_channel = show_data["channel"]
 
                 if len(show_episodes) == 1:
-                    new_items.append(
-                        {"item": show_episodes[0], "channel": target_channel}
-                    )
+                    new_items.append({"item": show_episodes[0], "channel": target_channel})
                 else:
                     # Create a group item
                     first_ep = show_episodes[0]
@@ -569,19 +533,13 @@ class PlexDiscordBot:
             embed.add_field(name="Score", value=f"{movie['rating']}/10", inline=True)
 
         if movie.get("duration"):
-            embed.add_field(
-                name="Duration", value=format_duration(movie["duration"]), inline=True
-            )
+            embed.add_field(name="Duration", value=format_duration(movie["duration"]), inline=True)
 
         if movie.get("genres"):
-            embed.add_field(
-                name="Genres", value=", ".join(movie["genres"]), inline=True
-            )
+            embed.add_field(name="Genres", value=", ".join(movie["genres"]), inline=True)
 
         if movie.get("directors"):
-            embed.add_field(
-                name="Director", value=", ".join(movie["directors"]), inline=True
-            )
+            embed.add_field(name="Director", value=", ".join(movie["directors"]), inline=True)
 
         if movie.get("actors"):
             embed.add_field(name="Cast", value=", ".join(movie["actors"]), inline=True)
@@ -642,7 +600,9 @@ class PlexDiscordBot:
         description = "**Episodes:**\n"
 
         for episode in episodes:
-            description += f"• S{episode['season_number']}E{episode['episode_number']} - {episode['title']}"
+            description += (
+                f"• S{episode['season_number']}E{episode['episode_number']} - {episode['title']}"
+            )
             if episode.get("air_date"):
                 description += f" (Aired: {episode['air_date']})"
             description += "\n"

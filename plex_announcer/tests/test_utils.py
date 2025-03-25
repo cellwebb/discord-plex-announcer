@@ -1,6 +1,5 @@
 """Tests for utility functions."""
 
-import json
 import os
 from unittest.mock import mock_open, patch
 

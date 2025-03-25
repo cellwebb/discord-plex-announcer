@@ -37,8 +37,6 @@ def save_last_check_time(timestamp: datetime, timestamp_file: str) -> None:
     try:
         with open(timestamp_file, "w") as f:
             f.write(timestamp.isoformat())
-        logger.debug(
-            f"Saved check timestamp {timestamp.isoformat()} to {timestamp_file}"
-        )
+        logger.debug(f"Saved check timestamp {timestamp.isoformat()} to {timestamp_file}")
     except IOError as e:
         logger.error(f"Error saving check timestamp: {e}")

@@ -36,9 +36,7 @@ async def main():
     ]
     missing = [var for var in required_vars if not os.getenv(var)]
     if missing:
-        raise ValueError(
-            f"Missing required environment variables: {', '.join(missing)}"
-        )
+        raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
     discord_token: Optional[str] = os.getenv("DISCORD_TOKEN")
     channel_id: int = int(os.getenv("DISCORD_CHANNEL_ID"))
@@ -65,9 +63,7 @@ async def main():
     log_level: str = os.getenv("LOGGING_LEVEL", "INFO")
     notify_movies: bool = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
     notify_new_shows: bool = os.getenv("NOTIFY_NEW_SHOWS", "true").lower() == "true"
-    notify_recent_episodes: bool = (
-        os.getenv("NOTIFY_RECENT_EPISODES", "true").lower() == "true"
-    )
+    notify_recent_episodes: bool = os.getenv("NOTIFY_RECENT_EPISODES", "true").lower() == "true"
     recent_episode_days: int = int(os.getenv("RECENT_EPISODE_DAYS", "30"))
     plex_connect_retry: int = int(os.getenv("PLEX_CONNECT_RETRY", "3"))
     bot_presence_channel_id: Optional[int] = (

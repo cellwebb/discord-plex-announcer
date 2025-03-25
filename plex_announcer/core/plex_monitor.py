@@ -46,9 +46,7 @@ class PlexMonitor:
                 logger.info(f"Connection attempt {attempt + 1}/{self.connect_retry}")
                 # Set timeout for initial connection only
                 self.plex = PlexServer(self.plex_base_url, self.plex_token, timeout=10)
-                logger.info(
-                    f"Successfully connected to Plex server: {self.plex.friendlyName}"
-                )
+                logger.info(f"Successfully connected to Plex server: {self.plex.friendlyName}")
                 return True
             except Unauthorized as e:
                 logger.error("Authentication failed for Plex server: %s", e)
@@ -64,9 +62,7 @@ class PlexMonitor:
                     logger.info("Retrying in 5 seconds...")
                     time.sleep(5)
 
-        logger.error(
-            "Failed to connect to Plex server after %s attempts", self.connect_retry
-        )
+        logger.error("Failed to connect to Plex server after %s attempts", self.connect_retry)
         return False
 
     def get_library(self, library_name: str) -> Optional[LibrarySection]:
@@ -110,9 +106,7 @@ class PlexMonitor:
             # Determine cutoff date based on parameters
             if since_datetime:
                 cutoff_date = since_datetime
-                logger.info(
-                    f"Searching for movies added since {cutoff_date.isoformat()}"
-                )
+                logger.info(f"Searching for movies added since {cutoff_date.isoformat()}")
             else:
                 cutoff_date = datetime.now() - timedelta(days=days)
                 logger.info(f"Searching for movies added in the last {days} days")
@@ -120,9 +114,7 @@ class PlexMonitor:
             try:
                 # Get all movies sorted by addedAt in descending order
                 # Explicitly specify only valid filter fields
-                recent_movies: List[Movie] = library.search(
-                    libtype="movie", sort="addedAt:desc"
-                )
+                recent_movies: List[Movie] = library.search(libtype="movie", sort="addedAt:desc")
             except (ConnectionError, ReadTimeout, socket.timeout) as e:
                 logger.error("Error getting recently added movies: %s", e)
                 return []
@@ -136,7 +128,9 @@ class PlexMonitor:
                     if movie.addedAt > cutoff_date:
                         poster_url: Optional[str] = None
                         if movie.thumb:
-                            poster_url = f"{self.plex_base_url}{movie.thumb}?X-Plex-Token={self.plex_token}"
+                            poster_url = (
+                                f"{self.plex_base_url}{movie.thumb}?X-Plex-Token={self.plex_token}"
+                            )
 
                         # Get movie attributes safely
                         content_rating = "Not Rated"
@@ -179,9 +173,7 @@ class PlexMonitor:
                     logger.error("Error processing movie: %s", e)
                     continue
 
-            logger.info(
-                f"Found {len(new_movies)} new movies since {cutoff_date.isoformat()}"
-            )
+            logger.info(f"Found {len(new_movies)} new movies since {cutoff_date.isoformat()}")
             return new_movies
         except Exception as e:
             logger.error("Error getting recently added movies: %s", e)
@@ -211,9 +203,7 @@ class PlexMonitor:
             # Determine cutoff date based on parameters
             if since_datetime:
                 cutoff_date = since_datetime
-                logger.info(
-                    f"Searching for episodes added since {cutoff_date.isoformat()}"
-                )
+                logger.info(f"Searching for episodes added since {cutoff_date.isoformat()}")
             else:
                 cutoff_date = datetime.now() - timedelta(days=days)
                 logger.info(f"Searching for episodes added in the last {days} days")
@@ -221,9 +211,7 @@ class PlexMonitor:
             try:
                 # Get all episodes sorted by addedAt in descending order
                 # Explicitly specify only valid filter fields
-                recent_episodes: List[Episode] = library.searchEpisodes(
-                    sort="addedAt:desc"
-                )
+                recent_episodes: List[Episode] = library.searchEpisodes(sort="addedAt:desc")
             except (ConnectionError, ReadTimeout, socket.timeout) as e:
                 logger.error("Error getting recently added episodes: %s", e)
                 return []
@@ -291,9 +279,7 @@ class PlexMonitor:
                     logger.error("Error processing episode: %s", e)
                     continue
 
-            logger.info(
-                f"Found {len(new_episodes)} new episodes since {cutoff_date.isoformat()}"
-            )
+            logger.info(f"Found {len(new_episodes)} new episodes since {cutoff_date.isoformat()}")
             return new_episodes
         except Exception as e:
             logger.error("Error getting recently added episodes: %s", e)
