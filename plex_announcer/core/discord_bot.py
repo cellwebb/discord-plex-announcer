@@ -417,22 +417,12 @@ class PlexDiscordBot:
                 since_datetime=self.last_check_time, days=1
             )
 
-            # Group episodes by show
-            shows = {}
-            show_is_new = {}
-
             for episode in episodes:
                 if episode["key"] not in self.processed_media:
-                    show_title = episode["show_title"]
-
                     # Check if this is a new show (first episode of first season)
                     is_first_episode = (
                         episode["season_number"] == 1 and episode["episode_number"] == 1
                     )
-
-                    # Track if this show is new to the server
-                    if is_first_episode:
-                        show_is_new[show_title] = True
 
                     # Check if the episode recently aired (if it has an air date)
                     recently_aired = False
@@ -450,7 +440,7 @@ class PlexDiscordBot:
                     target_channel = default_channel
 
                     # Add if it's a new show and we're notifying for new shows
-                    if self.notify_new_shows and show_is_new.get(show_title, False):
+                    if self.notify_new_shows and is_first_episode:
                         should_add = True
                         target_channel = new_shows_channel
 
@@ -460,34 +450,10 @@ class PlexDiscordBot:
                         target_channel = recent_episodes_channel
 
                     if should_add:
-                        if show_title not in shows:
-                            shows[show_title] = {
-                                "episodes": [],
-                                "channel": target_channel,
-                            }
-                        shows[show_title]["episodes"].append(episode)
+                        new_items.append({"item": episode, "channel": target_channel})
 
                     # Mark as processed regardless
                     self.processed_media.add(episode["key"])
-
-            # Add grouped episodes to new items
-            for show_title, show_data in shows.items():
-                show_episodes = show_data["episodes"]
-                target_channel = show_data["channel"]
-
-                if len(show_episodes) == 1:
-                    new_items.append({"item": show_episodes[0], "channel": target_channel})
-                else:
-                    # Create a group item
-                    first_ep = show_episodes[0]
-                    group_item = {
-                        "type": "tv_group",
-                        "show_title": show_title,
-                        "episodes": show_episodes,
-                        "poster_url": first_ep.get("show_poster_url"),
-                        "is_new_show": show_is_new.get(show_title, False),
-                    }
-                    new_items.append({"item": group_item, "channel": target_channel})
 
         # Send notifications for new items
         for item_data in new_items:
@@ -499,9 +465,6 @@ class PlexDiscordBot:
                 await channel.send(embed=embed)
             elif isinstance(item, dict) and item.get("type") == "episode":
                 embed = self._create_episode_embed(item)
-                await channel.send(embed=embed)
-            elif isinstance(item, dict) and item.get("type") == "tv_group":
-                embed = self._create_episode_group_embed(item)
                 await channel.send(embed=embed)
 
         # Update and save the last check time
@@ -581,46 +544,6 @@ class PlexDiscordBot:
 
         if episode.get("air_date"):
             embed.add_field(name="Air Date", value=episode["air_date"], inline=True)
-
-        embed.set_footer(text="Plex Media Server")
-
-        return embed
-
-    def _create_episode_group_embed(self, group: Dict[str, Any]) -> discord.Embed:
-        """Create a Discord embed for a group of TV episodes."""
-        episodes = group["episodes"]
-        show_title = group["show_title"]
-        is_new_show = group.get("is_new_show", False)
-
-        if is_new_show:
-            title = f"New Show Added: {show_title}"
-        else:
-            title = f"New Episodes Added: {show_title}"
-
-        description = "**Episodes:**\n"
-
-        for episode in episodes:
-            description += (
-                f"• S{episode['season_number']}E{episode['episode_number']} - {episode['title']}"
-            )
-            if episode.get("air_date"):
-                description += f" (Aired: {episode['air_date']})"
-            description += "\n"
-
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.green(),
-            timestamp=datetime.now(),
-        )
-
-        if group.get("poster_url"):
-            embed.set_thumbnail(url=group["poster_url"])
-
-        embed.add_field(name="Total Episodes", value=str(len(episodes)), inline=True)
-
-        if is_new_show:
-            embed.add_field(name="New Series", value="✅", inline=True)
 
         embed.set_footer(text="Plex Media Server")
 
