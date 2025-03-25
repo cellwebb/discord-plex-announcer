@@ -11,6 +11,7 @@ from plexapi.exceptions import NotFound, Unauthorized
 from plexapi.library import LibrarySection
 from plexapi.server import PlexServer
 from plexapi.video import Episode, Movie
+from requests.exceptions import ConnectionError, ReadTimeout
 
 logger = logging.getLogger("plex_discord_bot")
 
@@ -42,27 +43,27 @@ class PlexMonitor:
         for attempt in range(self.connect_retry):
             try:
                 logger.info(f"Connection attempt {attempt + 1}/{self.connect_retry}")
-                self.plex = PlexServer(self.plex_url, self.plex_token)
+                self.plex = PlexServer(self.plex_url, self.plex_token, timeout=10)
                 logger.info(
                     f"Successfully connected to Plex server: {self.plex.friendlyName}"
                 )
                 return True
             except Unauthorized as e:
-                logger.error(f"Authentication failed for Plex server: {e}")
+                logger.error("Authentication failed for Plex server: %s", e)
                 return False
-            except (ConnectionError, TimeoutError) as e:
-                logger.error(f"Failed to connect to Plex server: {e}")
+            except ConnectionError as e:
+                logger.error("Failed to connect to Plex server: %s", e)
                 if attempt < self.connect_retry - 1:
-                    logger.info(f"Retrying in 5 seconds...")
+                    logger.info("Retrying in 5 seconds...")
                     time.sleep(5)
             except Exception as e:
-                logger.error(f"Failed to connect to Plex server: {e}")
+                logger.error("Failed to connect to Plex server: %s", e)
                 if attempt < self.connect_retry - 1:
-                    logger.info(f"Retrying in 5 seconds...")
+                    logger.info("Retrying in 5 seconds...")
                     time.sleep(5)
 
         logger.error(
-            f"Failed to connect to Plex server after {self.connect_retry} attempts"
+            "Failed to connect to Plex server after %s attempts", self.connect_retry
         )
         return False
 
@@ -77,7 +78,7 @@ class PlexMonitor:
             logger.info(f"Found library: {library_name}")
             return library
         except NotFound:
-            logger.error(f"Library '{library_name}' not found on Plex server")
+            logger.error(f"Failed to find library '{library_name}'")
             return None
         except Exception as e:
             logger.error(f"Failed to find library '{library_name}': {e}")
@@ -86,8 +87,8 @@ class PlexMonitor:
     def get_recently_added_movies(self, days: int = 1) -> List[Dict[str, Any]]:
         """Get movies added to Plex within the specified time period."""
         if not self.plex:
-            if not self.connect():
-                return []
+            logger.error("Not connected to Plex server")
+            return []
 
         try:
             library = self.get_library(self.movie_library)
@@ -95,9 +96,16 @@ class PlexMonitor:
                 return []
 
             cutoff_date: datetime = datetime.now() - timedelta(days=days)
-            recent_movies: List[Movie] = library.search(
-                libtype="movie", sort="addedAt:desc"
-            )
+            try:
+                recent_movies: List[Movie] = library.search(
+                    libtype="movie", sort="addedAt:desc"
+                )
+            except (ConnectionError, ReadTimeout) as e:
+                logger.error("Error getting recently added movies: %s", e)
+                return []
+            except Exception as e:
+                logger.error("Error getting recently added movies: %s", e)
+                return []
 
             new_movies: List[Dict[str, Any]] = []
             for movie in recent_movies:
@@ -119,32 +127,19 @@ class PlexMonitor:
                             ),
                             "rating": getattr(movie, "rating", None),
                             "poster_url": poster_url,
-                            "duration": movie.duration,
-                            "genres": [
-                                genre.tag for genre in getattr(movie, "genres", [])
-                            ],
-                            "directors": [
-                                director.tag
-                                for director in getattr(movie, "directors", [])
-                            ],
-                            "actors": [
-                                actor.tag for actor in getattr(movie, "roles", [])
-                            ][:3],
+                            "genres": [g.tag for g in getattr(movie, "genres", [])],
                         }
                     )
-                else:
-                    break
-
             return new_movies
         except Exception as e:
-            logger.error(f"Error getting recently added movies: {e}")
+            logger.error("Error getting recently added movies: %s", e)
             return []
 
     def get_recently_added_episodes(self, days: int = 1) -> List[Dict[str, Any]]:
         """Get TV episodes added to Plex within the specified time period."""
         if not self.plex:
-            if not self.connect():
-                return []
+            logger.error("Not connected to Plex server")
+            return []
 
         try:
             library = self.get_library(self.tv_library)
@@ -152,7 +147,16 @@ class PlexMonitor:
                 return []
 
             cutoff_date: datetime = datetime.now() - timedelta(days=days)
-            recent_episodes: List[Episode] = library.searchEpisodes(sort="addedAt:desc")
+            try:
+                recent_episodes: List[Episode] = library.searchEpisodes(
+                    sort="addedAt:desc"
+                )
+            except (ConnectionError, ReadTimeout) as e:
+                logger.error("Error getting recently added episodes: %s", e)
+                return []
+            except Exception as e:
+                logger.error("Error getting recently added episodes: %s", e)
+                return []
 
             new_episodes: List[Dict[str, Any]] = []
             for episode in recent_episodes:
@@ -197,5 +201,5 @@ class PlexMonitor:
 
             return new_episodes
         except Exception as e:
-            logger.error(f"Error getting recently added episodes: {e}")
+            logger.error("Error getting recently added episodes: %s", e)
             return []

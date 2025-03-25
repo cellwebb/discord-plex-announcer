@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `RECENT_EPISODES_CHANNEL_ID`: Channel for recent episode announcements
 - If specialized channels are not specified, announcements will be sent to the default channel
 
+### Fixed
+
+- Added timeout parameter to Plex server connection to prevent the bot from hanging indefinitely
+- Improved error handling for Plex API calls to gracefully handle connection timeouts
+- Fixed logger definition in signal handler to properly handle termination signals
+
 ## [0.2.0] - 2025-03-22
 
 ### Added
