@@ -5,7 +5,7 @@ Discord bot implementation for sending Plex media notifications.
 import logging
 import os
 from datetime import datetime, time
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 import discord
 from discord.ext import commands, tasks
@@ -58,8 +58,8 @@ class PlexDiscordBot:
         self.recent_episode_days = recent_episode_days
         self.check_interval = check_interval
         self.data_file = data_file
-        self.processed_media: Set[str] = set()
-        self.start_time: float = time.time()
+        self.processed_media = set()
+        self.start_time = time.time()
 
         # Create timestamp file path based on data_file
         self.timestamp_file = os.path.join(
