@@ -25,19 +25,21 @@ class PlexDiscordBot:
         self,
         token: str,
         plex_monitor,
-        check_interval: int,
         movie_channel_id: int,
         new_shows_channel_id: int,
         recent_episodes_channel_id: int,
-        bot_debug_channel_id: int,
+        bot_debug_channel_id: int = None,
+        movie_library: str = "Movies",
+        tv_library: str = "TV Shows",
         notify_movies: bool = True,
         notify_new_shows: bool = True,
         notify_recent_episodes: bool = True,
-        recent_episode_days: int = 30,
-        movie_library: str = "Movies",
-        tv_library: str = "TV Shows",
+        recent_episode_days: int = 7,
+        check_interval: int = 30,
+        webhook_enabled: bool = False,
+        webhook_port: int = 8888,
     ):
-        """Initialize the Discord bot with configuration parameters."""
+        """Initialize the Discord bot."""
         self.token = token
         self.movie_channel_id = movie_channel_id  # Channel for movie announcements
         self.new_shows_channel_id = new_shows_channel_id  # Channel for new show announcements
@@ -53,6 +55,13 @@ class PlexDiscordBot:
         self.notify_recent_episodes = notify_recent_episodes
         self.recent_episode_days = recent_episode_days
         self.check_interval = check_interval
+        self.webhook_enabled = webhook_enabled
+        self.webhook_port = webhook_port
+        self.webhook_server = None
+
+        # Internal state
+        self.last_connected = False
+        self.bot = commands.Bot(command_prefix="/", intents=discord.Intents.default())
         self.processed_media = set()
         self.start_time = time.time()
 
@@ -61,7 +70,6 @@ class PlexDiscordBot:
         # Set up Discord bot
         intents = discord.Intents.default()
         intents.message_content = True
-        self.bot = commands.Bot(command_prefix="!", intents=intents)
 
         # Register commands and events
         self._setup_bot()
@@ -435,10 +443,27 @@ class PlexDiscordBot:
         # Start the media check task
         self.check_media_task.start()
 
+        # Add commands
+        self._register_commands()
+
+        # Setup event handlers
+        @self.bot.event
+        async def on_ready():
+            await self._on_ready()
+
+        # Start the webhook server if enabled
+        if self.webhook_enabled:
+            try:
+                from plex_announcer.core.webhook_server import PlexWebhookServer
+
+                self.webhook_server = PlexWebhookServer(self, port=self.webhook_port)
+                await self.webhook_server.start()
+                logger.info(f"Webhook server started on port {self.webhook_port}")
+            except Exception as e:
+                logger.error(f"Failed to start webhook server: {e}")
+
+        # Run the bot with a timeout
         try:
-            # Run the bot with a timeout
-            logger.info("Starting Discord bot connection")
-            # Run the bot with a timeout
             await asyncio.wait_for(self.bot.start(self.token), timeout=60)
         except asyncio.TimeoutError:
             logger.error(
@@ -447,7 +472,111 @@ class PlexDiscordBot:
             return
         except Exception as e:
             logger.error(f"Error starting Discord bot: {e}")
+
+    # Webhook handling methods
+    async def announce_new_movie_from_webhook(self, metadata: dict):
+        """Announce a new movie from webhook data."""
+        if not self.notify_movies or not self.bot.is_ready():
             return
+
+        logger.info(f"Processing webhook for new movie: {metadata.get('title')}")
+
+        try:
+            channel = self.bot.get_channel(self.movie_channel_id)
+            if not channel:
+                logger.error(f"Could not find movie channel with ID {self.movie_channel_id}")
+                return
+
+            # Basic movie info from webhook
+            movie_data = {
+                "title": metadata.get("title", "Unknown Title"),
+                "summary": metadata.get("summary", "No summary available"),
+                "year": metadata.get("year", "Unknown Year"),
+                "tagline": metadata.get("tagline", ""),
+                "thumb": metadata.get("thumb", ""),
+                "art": metadata.get("art", ""),
+                "duration": metadata.get("duration", 0),
+                "rating": metadata.get("rating", 0.0),
+                "added_at": int(time.time()),
+            }
+
+            # Create and send embed
+            embed = EmbedBuilder.build_movie_embed(movie_data)
+            await channel.send(embed=embed)
+            logger.info(f"Announced new movie from webhook: {movie_data['title']}")
+        except Exception as e:
+            logger.error(f"Error announcing movie from webhook: {e}", exc_info=True)
+
+    async def announce_new_episode_from_webhook(self, metadata: dict):
+        """Announce a new episode from webhook data."""
+        if not self.notify_recent_episodes or not self.bot.is_ready():
+            return
+
+        logger.info(f"Processing webhook for new episode: {metadata.get('title')}")
+
+        try:
+            channel = self.bot.get_channel(self.recent_episodes_channel_id)
+            if not channel:
+                logger.error(
+                    f"Could not find episodes channel with ID {self.recent_episodes_channel_id}"
+                )
+                return
+
+            # Basic episode info from webhook
+            show_title = metadata.get("grandparentTitle", "Unknown Show")
+            episode_data = {
+                "title": metadata.get("title", "Unknown Title"),
+                "summary": metadata.get("summary", "No summary available"),
+                "season": metadata.get("parentIndex", 0),
+                "episode": metadata.get("index", 0),
+                "show_title": show_title,
+                "thumb": metadata.get("thumb", ""),
+                "art": metadata.get("art", ""),
+                "grandparentThumb": metadata.get("grandparentThumb", ""),
+                "duration": metadata.get("duration", 0),
+                "added_at": int(time.time()),
+            }
+
+            # Create and send embed
+            embed = EmbedBuilder.build_episode_embed(episode_data)
+            await channel.send(embed=embed)
+            logger.info(
+                f"Announced new episode from webhook: {show_title} S{episode_data['season']}E{episode_data['episode']}"
+            )
+        except Exception as e:
+            logger.error(f"Error announcing episode from webhook: {e}", exc_info=True)
+
+    async def announce_new_show_from_webhook(self, metadata: dict):
+        """Announce a new show from webhook data."""
+        if not self.notify_new_shows or not self.bot.is_ready():
+            return
+
+        logger.info(f"Processing webhook for new show: {metadata.get('title')}")
+
+        try:
+            channel = self.bot.get_channel(self.new_shows_channel_id)
+            if not channel:
+                logger.error(
+                    f"Could not find new shows channel with ID {self.new_shows_channel_id}"
+                )
+                return
+
+            # Basic show info from webhook
+            show_data = {
+                "title": metadata.get("title", "Unknown Title"),
+                "summary": metadata.get("summary", "No summary available"),
+                "year": metadata.get("year", "Unknown Year"),
+                "thumb": metadata.get("thumb", ""),
+                "art": metadata.get("art", ""),
+                "added_at": int(time.time()),
+            }
+
+            # Create and send embed
+            embed = EmbedBuilder.build_show_embed(show_data)
+            await channel.send(embed=embed)
+            logger.info(f"Announced new show from webhook: {show_data['title']}")
+        except Exception as e:
+            logger.error(f"Error announcing show from webhook: {e}", exc_info=True)
 
     async def _check_for_new_media(self, manual: bool = False):
         """Check for new media and send Discord notifications."""

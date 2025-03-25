@@ -4,7 +4,6 @@ Configuration management for Plex Discord Announcer.
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -27,6 +26,8 @@ class Config:
     notify_recent_episodes: bool = True
     recent_episode_days: int = 30
     plex_connect_retry: int = 3
+    webhook_enabled: bool = False
+    webhook_port: int = 10000
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -55,6 +56,7 @@ class Config:
         notify_movies = os.getenv("NOTIFY_MOVIES", "true").lower() == "true"
         notify_new_shows = os.getenv("NOTIFY_NEW_SHOWS", "true").lower() == "true"
         notify_recent_episodes = os.getenv("NOTIFY_RECENT_EPISODES", "true").lower() == "true"
+        webhook_enabled = os.getenv("WEBHOOK_ENABLED", "false").lower() == "true"
 
         return cls(
             discord_token=os.getenv("DISCORD_TOKEN"),
@@ -73,4 +75,6 @@ class Config:
             notify_recent_episodes=notify_recent_episodes,
             recent_episode_days=int(os.getenv("RECENT_EPISODE_DAYS", "30")),
             plex_connect_retry=int(os.getenv("PLEX_CONNECT_RETRY", "3")),
+            webhook_enabled=webhook_enabled,
+            webhook_port=int(os.getenv("WEBHOOK_PORT", "10000")),
         )

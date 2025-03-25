@@ -74,6 +74,8 @@ async def main():
             notify_recent_episodes=config.notify_recent_episodes,
             recent_episode_days=config.recent_episode_days,
             check_interval=config.check_interval,
+            webhook_enabled=config.webhook_enabled,
+            webhook_port=config.webhook_port,
         )
 
         logger.info("Starting Discord bot")

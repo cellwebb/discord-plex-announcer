@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     command: sh /app/start.sh
+    ports:
+      - "10000:10000"  # Webhook port
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
