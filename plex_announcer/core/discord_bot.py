@@ -6,14 +6,13 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import discord
 from discord.ext import commands, tasks
 
-from plex_announcer.utils.formatting import format_duration
-from plex_announcer.utils.media_storage import (load_last_check_time,
-                                                save_last_check_time)
+from plex_announcer.utils.embed_builder import EmbedBuilder
+from plex_announcer.utils.media_storage import load_last_check_time, save_last_check_time
 
 logger = logging.getLogger("plex_discord_bot")
 
@@ -461,10 +460,10 @@ class PlexDiscordBot:
             channel = item_data["channel"]
 
             if isinstance(item, dict) and item.get("type") == "movie":
-                embed = self._create_movie_embed(item)
+                embed = EmbedBuilder.create_movie_embed(item)
                 await channel.send(embed=embed)
             elif isinstance(item, dict) and item.get("type") == "episode":
-                embed = self._create_episode_embed(item)
+                embed = EmbedBuilder.create_episode_embed(item)
                 await channel.send(embed=embed)
 
         # Update and save the last check time
@@ -477,77 +476,13 @@ class PlexDiscordBot:
         else:
             logger.info("No new media found")
 
-    def _create_movie_embed(self, movie: Dict[str, Any]) -> discord.Embed:
-        """Create a Discord embed for a movie."""
-        embed = discord.Embed(
-            title=f"New Movie Added: {movie['title']} ({movie.get('year', 'N/A')})",
-            description=movie.get("summary", "No summary available"),
-            color=discord.Color.blue(),
-            timestamp=datetime.now(),
-        )
-
-        if movie.get("poster_url"):
-            embed.set_thumbnail(url=movie["poster_url"])
-
-        if movie.get("content_rating"):
-            embed.add_field(name="Rating", value=movie["content_rating"], inline=True)
-
-        if movie.get("rating"):
-            embed.add_field(name="Score", value=f"{movie['rating']}/10", inline=True)
-
-        if movie.get("duration"):
-            embed.add_field(name="Duration", value=format_duration(movie["duration"]), inline=True)
-
-        if movie.get("genres"):
-            embed.add_field(name="Genres", value=", ".join(movie["genres"]), inline=True)
-
-        if movie.get("directors"):
-            embed.add_field(name="Director", value=", ".join(movie["directors"]), inline=True)
-
-        if movie.get("actors"):
-            embed.add_field(name="Cast", value=", ".join(movie["actors"]), inline=True)
-
-        embed.set_footer(text="Plex Media Server")
-
-        return embed
-
-    def _create_episode_embed(self, episode: Dict[str, Any]) -> discord.Embed:
-        """Create a Discord embed for a TV episode."""
-        is_new_show = episode["season_number"] == 1 and episode["episode_number"] == 1
-
-        if is_new_show:
-            title = f"New Show Added: {episode['show_title']}"
-        else:
-            title = f"New Episode Added: {episode['show_title']}"
-
-        description = f"**S{episode['season_number']}E{episode['episode_number']} - {episode['title']}**\n\n{episode.get('summary', 'No summary available')}"  # noqa: E501
-
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.green(),
-            timestamp=datetime.now(),
-        )
-
-        if episode.get("poster_url"):
-            embed.set_thumbnail(url=episode["poster_url"])
-        elif episode.get("show_poster_url"):
-            embed.set_thumbnail(url=episode["show_poster_url"])
-
-        if episode.get("content_rating"):
-            embed.add_field(name="Rating", value=episode["content_rating"], inline=True)
-
-        if episode.get("duration"):
-            embed.add_field(
-                name="Duration", value=format_duration(episode["duration"]), inline=True
-            )
-
-        if episode.get("air_date"):
-            embed.add_field(name="Air Date", value=episode["air_date"], inline=True)
-
-        embed.set_footer(text="Plex Media Server")
-
-        return embed
+        if manual:
+            if new_items:
+                logger.info(f"Found {len(new_items)} new items")
+                return f"Found {len(new_items)} new items"
+            else:
+                logger.info("No new items found")
+                return "No new items found"
 
 
 # For backward compatibility

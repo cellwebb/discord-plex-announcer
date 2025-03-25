@@ -6,8 +6,7 @@ from unittest.mock import mock_open, patch
 import pytest
 
 from plex_announcer.utils.formatting import format_duration
-from plex_announcer.utils.media_storage import (load_processed_media,
-                                                save_processed_media)
+from plex_announcer.utils.media_storage import load_processed_media, save_processed_media
 
 
 @pytest.fixture
