@@ -170,7 +170,7 @@ class PlexMonitor:
                             }
                         )
                     else:
-                        # Since movies are sorted by addedAt, we can break early once we hit older movies
+                        # Since movies are sorted by addedAt, we can break early once we hit older movies  # noqa: E501
                         logger.debug(
                             f"Skipping older movies (added before {cutoff_date.isoformat()})"
                         )
@@ -282,7 +282,7 @@ class PlexMonitor:
                             }
                         )
                     else:
-                        # Since episodes are sorted by addedAt, we can break early once we hit older episodes
+                        # Since episodes are sorted by addedAt, we can break early once we hit older episodes  # noqa: E501
                         logger.debug(
                             f"Skipping older episodes (added before {cutoff_date.isoformat()})"
                         )

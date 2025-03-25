@@ -4,9 +4,8 @@ Discord bot implementation for sending Plex media notifications.
 
 import logging
 import os
-import time
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Union
+from datetime import datetime, time
+from typing import Any, Dict, Optional, Set
 
 import discord
 from discord.ext import commands, tasks
@@ -136,7 +135,7 @@ class PlexDiscordBot:
                     # Send startup message
                     startup_embed = discord.Embed(
                         title="Plex Announcer Bot Online",
-                        description="The Plex Announcer Bot is now online and monitoring your Plex server for new content.",
+                        description="The Plex Announcer Bot is now online and monitoring your Plex server for new content.",  # noqa: E501
                         color=discord.Color.green(),
                         timestamp=datetime.now(),
                     )
