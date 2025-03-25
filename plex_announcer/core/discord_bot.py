@@ -67,11 +67,6 @@ class PlexDiscordBot:
             os.path.dirname(self.data_file), "last_check_time.txt"
         )
 
-        # Create startup flag file path
-        self.startup_flag_file = os.path.join(
-            os.path.dirname(self.data_file), "startup_complete.flag"
-        )
-
         self.last_check_time: Optional[datetime] = None
 
         # Set up Discord bot
