@@ -3,6 +3,7 @@ Module for monitoring Plex Media Server for new content.
 """
 
 import logging
+import socket
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -43,6 +44,7 @@ class PlexMonitor:
         for attempt in range(self.connect_retry):
             try:
                 logger.info(f"Connection attempt {attempt + 1}/{self.connect_retry}")
+                # Set timeout for initial connection only
                 self.plex = PlexServer(self.plex_url, self.plex_token, timeout=10)
                 logger.info(
                     f"Successfully connected to Plex server: {self.plex.friendlyName}"
@@ -51,7 +53,7 @@ class PlexMonitor:
             except Unauthorized as e:
                 logger.error("Authentication failed for Plex server: %s", e)
                 return False
-            except ConnectionError as e:
+            except (ConnectionError, ReadTimeout, socket.timeout) as e:
                 logger.error("Failed to connect to Plex server: %s", e)
                 if attempt < self.connect_retry - 1:
                     logger.info("Retrying in 5 seconds...")
@@ -84,8 +86,18 @@ class PlexMonitor:
             logger.error(f"Failed to find library '{library_name}': {e}")
             return None
 
-    def get_recently_added_movies(self, days: int = 1) -> List[Dict[str, Any]]:
-        """Get movies added to Plex within the specified time period."""
+    def get_recently_added_movies(
+        self, since_datetime: Optional[datetime] = None, days: int = 1
+    ) -> List[Dict[str, Any]]:
+        """Get movies added to Plex within the specified time period.
+
+        Args:
+            since_datetime: Only return movies added after this datetime
+            days: Number of days to look back if since_datetime is not provided
+
+        Returns:
+            List of movie dictionaries with metadata
+        """
         if not self.plex:
             logger.error("Not connected to Plex server")
             return []
@@ -95,12 +107,23 @@ class PlexMonitor:
             if not library:
                 return []
 
-            cutoff_date: datetime = datetime.now() - timedelta(days=days)
+            # Determine cutoff date based on parameters
+            if since_datetime:
+                cutoff_date = since_datetime
+                logger.info(
+                    f"Searching for movies added since {cutoff_date.isoformat()}"
+                )
+            else:
+                cutoff_date = datetime.now() - timedelta(days=days)
+                logger.info(f"Searching for movies added in the last {days} days")
+
             try:
+                # Get all movies sorted by addedAt in descending order
+                # Explicitly specify only valid filter fields
                 recent_movies: List[Movie] = library.search(
                     libtype="movie", sort="addedAt:desc"
                 )
-            except (ConnectionError, ReadTimeout) as e:
+            except (ConnectionError, ReadTimeout, socket.timeout) as e:
                 logger.error("Error getting recently added movies: %s", e)
                 return []
             except Exception as e:
@@ -109,34 +132,73 @@ class PlexMonitor:
 
             new_movies: List[Dict[str, Any]] = []
             for movie in recent_movies:
-                if movie.addedAt > cutoff_date:
-                    poster_url: Optional[str] = None
-                    if movie.thumb:
-                        poster_url = f"{self.plex_url}{movie.thumb}?X-Plex-Token={self.plex_token}"
+                try:
+                    if movie.addedAt > cutoff_date:
+                        poster_url: Optional[str] = None
+                        if movie.thumb:
+                            poster_url = f"{self.plex_url}{movie.thumb}?X-Plex-Token={self.plex_token}"
 
-                    new_movies.append(
-                        {
-                            "type": "movie",
-                            "key": movie.key,
-                            "title": movie.title,
-                            "year": movie.year,
-                            "added_at": movie.addedAt.isoformat(),
-                            "summary": movie.summary,
-                            "content_rating": getattr(
-                                movie, "contentRating", "Not Rated"
-                            ),
-                            "rating": getattr(movie, "rating", None),
-                            "poster_url": poster_url,
-                            "genres": [g.tag for g in getattr(movie, "genres", [])],
-                        }
-                    )
+                        # Get movie attributes safely
+                        content_rating = "Not Rated"
+                        rating = None
+                        genres = []
+
+                        try:
+                            if hasattr(movie, "contentRating"):
+                                content_rating = movie.contentRating
+                            if hasattr(movie, "rating"):
+                                rating = movie.rating
+                            if hasattr(movie, "genres"):
+                                genres = [g.tag for g in movie.genres]
+                        except (ConnectionError, ReadTimeout, socket.timeout) as e:
+                            logger.error("Error getting movie metadata: %s", e)
+                        except Exception as e:
+                            logger.error("Error getting movie metadata: %s", e)
+
+                        new_movies.append(
+                            {
+                                "type": "movie",
+                                "key": movie.key,
+                                "title": movie.title,
+                                "year": movie.year,
+                                "added_at": movie.addedAt.isoformat(),
+                                "summary": movie.summary,
+                                "content_rating": content_rating,
+                                "rating": rating,
+                                "poster_url": poster_url,
+                                "genres": genres,
+                            }
+                        )
+                    else:
+                        # Since movies are sorted by addedAt, we can break early once we hit older movies
+                        logger.debug(
+                            f"Skipping older movies (added before {cutoff_date.isoformat()})"
+                        )
+                        break
+                except Exception as e:
+                    logger.error("Error processing movie: %s", e)
+                    continue
+
+            logger.info(
+                f"Found {len(new_movies)} new movies since {cutoff_date.isoformat()}"
+            )
             return new_movies
         except Exception as e:
             logger.error("Error getting recently added movies: %s", e)
             return []
 
-    def get_recently_added_episodes(self, days: int = 1) -> List[Dict[str, Any]]:
-        """Get TV episodes added to Plex within the specified time period."""
+    def get_recently_added_episodes(
+        self, since_datetime: Optional[datetime] = None, days: int = 1
+    ) -> List[Dict[str, Any]]:
+        """Get TV episodes added to Plex within the specified time period.
+
+        Args:
+            since_datetime: Only return episodes added after this datetime
+            days: Number of days to look back if since_datetime is not provided
+
+        Returns:
+            List of episode dictionaries with metadata
+        """
         if not self.plex:
             logger.error("Not connected to Plex server")
             return []
@@ -146,12 +208,23 @@ class PlexMonitor:
             if not library:
                 return []
 
-            cutoff_date: datetime = datetime.now() - timedelta(days=days)
+            # Determine cutoff date based on parameters
+            if since_datetime:
+                cutoff_date = since_datetime
+                logger.info(
+                    f"Searching for episodes added since {cutoff_date.isoformat()}"
+                )
+            else:
+                cutoff_date = datetime.now() - timedelta(days=days)
+                logger.info(f"Searching for episodes added in the last {days} days")
+
             try:
+                # Get all episodes sorted by addedAt in descending order
+                # Explicitly specify only valid filter fields
                 recent_episodes: List[Episode] = library.searchEpisodes(
                     sort="addedAt:desc"
                 )
-            except (ConnectionError, ReadTimeout) as e:
+            except (ConnectionError, ReadTimeout, socket.timeout) as e:
                 logger.error("Error getting recently added episodes: %s", e)
                 return []
             except Exception as e:
@@ -160,45 +233,67 @@ class PlexMonitor:
 
             new_episodes: List[Dict[str, Any]] = []
             for episode in recent_episodes:
-                if episode.addedAt > cutoff_date:
-                    poster_url: Optional[str] = None
-                    if episode.thumb:
-                        poster_url = f"{self.plex_url}{episode.thumb}?X-Plex-Token={self.plex_token}"
+                try:
+                    if episode.addedAt > cutoff_date:
+                        poster_url: Optional[str] = None
+                        if episode.thumb:
+                            poster_url = f"{self.plex_url}{episode.thumb}?X-Plex-Token={self.plex_token}"
 
-                    show_poster_url: Optional[str] = None
-                    if hasattr(episode.show(), "thumb") and episode.show().thumb:
-                        show_poster_url = f"{self.plex_url}{episode.show().thumb}?X-Plex-Token={self.plex_token}"
+                        show_poster_url: Optional[str] = None
+                        show = None
+                        show_content_rating = "Not Rated"
 
-                    # Get air date if available
-                    air_date = None
-                    if (
-                        hasattr(episode, "originallyAvailableAt")
-                        and episode.originallyAvailableAt
-                    ):
-                        air_date = episode.originallyAvailableAt.isoformat()
+                        try:
+                            show = episode.show()
+                            if hasattr(show, "thumb") and show.thumb:
+                                show_poster_url = f"{self.plex_url}{show.thumb}?X-Plex-Token={self.plex_token}"
+                            if hasattr(show, "contentRating"):
+                                show_content_rating = show.contentRating
+                        except (ConnectionError, ReadTimeout, socket.timeout) as e:
+                            logger.error("Error getting show data for episode: %s", e)
+                        except Exception as e:
+                            logger.error("Error getting show data for episode: %s", e)
 
-                    new_episodes.append(
-                        {
-                            "type": "episode",
-                            "key": episode.key,
-                            "title": episode.title,
-                            "show_title": episode.show().title,
-                            "season_number": episode.seasonNumber,
-                            "episode_number": episode.index,
-                            "added_at": episode.addedAt.isoformat(),
-                            "air_date": air_date,
-                            "summary": episode.summary,
-                            "content_rating": getattr(
-                                episode.show(), "contentRating", "Not Rated"
-                            ),
-                            "poster_url": poster_url,
-                            "show_poster_url": show_poster_url,
-                            "duration": episode.duration,
-                        }
-                    )
-                else:
-                    break
+                        # Get air date if available
+                        air_date = None
+                        if (
+                            hasattr(episode, "originallyAvailableAt")
+                            and episode.originallyAvailableAt
+                        ):
+                            air_date = episode.originallyAvailableAt.isoformat()
 
+                        new_episodes.append(
+                            {
+                                "type": "episode",
+                                "key": episode.key,
+                                "title": episode.title,
+                                "show_title": episode.grandparentTitle,
+                                "season": episode.parentIndex,
+                                "episode": episode.index,
+                                "season_number": episode.parentIndex,
+                                "episode_number": episode.index,
+                                "added_at": episode.addedAt.isoformat(),
+                                "air_date": air_date,
+                                "summary": episode.summary,
+                                "content_rating": show_content_rating,
+                                "poster_url": poster_url,
+                                "show_poster_url": show_poster_url,
+                                "duration": episode.duration,
+                            }
+                        )
+                    else:
+                        # Since episodes are sorted by addedAt, we can break early once we hit older episodes
+                        logger.debug(
+                            f"Skipping older episodes (added before {cutoff_date.isoformat()})"
+                        )
+                        break
+                except Exception as e:
+                    logger.error("Error processing episode: %s", e)
+                    continue
+
+            logger.info(
+                f"Found {len(new_episodes)} new episodes since {cutoff_date.isoformat()}"
+            )
             return new_episodes
         except Exception as e:
             logger.error("Error getting recently added episodes: %s", e)

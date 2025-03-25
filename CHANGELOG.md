@@ -16,11 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `NEW_SHOWS_CHANNEL_ID`: Channel for new TV show announcements
   - `RECENT_EPISODES_CHANNEL_ID`: Channel for recent episode announcements
 - If specialized channels are not specified, announcements will be sent to the default channel
+- Startup message sent to the default channel when the bot first connects to Discord
+- Added timestamp tracking to only search for content added since the last check
+- Added last check time display in status command and startup message
+
+### Changed
+
+- Optimized Plex API queries to reduce server load by only requesting content added since last check
+- Improved search efficiency by breaking early when encountering older content
 
 ### Fixed
 
 - Added timeout parameter to Plex server connection to prevent the bot from hanging indefinitely
 - Improved error handling for Plex API calls to gracefully handle connection timeouts
+- Added socket timeout handling to prevent connection issues at the socket level
+- Added timeout parameters to search methods to prevent hanging during library searches
+- Added robust error handling for nested API calls when processing movies and episodes
 - Fixed logger definition in signal handler to properly handle termination signals
 
 ## [0.2.0] - 2025-03-22

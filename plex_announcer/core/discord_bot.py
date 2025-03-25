@@ -3,15 +3,18 @@ Discord bot implementation for sending Plex media notifications.
 """
 
 import logging
+import os
 import time
-from datetime import datetime
-from typing import Any, Dict, Optional, Set
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Set, Union
 
 import discord
 from discord.ext import commands, tasks
 
 from plex_announcer.utils.formatting import format_duration
-from plex_announcer.utils.media_storage import (load_processed_media,
+from plex_announcer.utils.media_storage import (load_last_check_time,
+                                                load_processed_media,
+                                                save_last_check_time,
                                                 save_processed_media)
 
 logger = logging.getLogger("plex_discord_bot")
@@ -59,6 +62,18 @@ class PlexDiscordBot:
         self.processed_media: Set[str] = set()
         self.start_time: float = time.time()
 
+        # Create timestamp file path based on data_file
+        self.timestamp_file = os.path.join(
+            os.path.dirname(self.data_file), "last_check_time.txt"
+        )
+
+        # Create startup flag file path
+        self.startup_flag_file = os.path.join(
+            os.path.dirname(self.data_file), "startup_complete.flag"
+        )
+
+        self.last_check_time: Optional[datetime] = None
+
         # Set up Discord bot
         intents = discord.Intents.default()
         intents.message_content = True
@@ -70,11 +85,19 @@ class PlexDiscordBot:
         # Load processed media from storage
         self.processed_media = load_processed_media(self.data_file)
 
+        # Load last check time
+        self.last_check_time = load_last_check_time(self.timestamp_file)
+        if self.last_check_time:
+            logger.info(f"Loaded last check time: {self.last_check_time.isoformat()}")
+        else:
+            logger.info("No previous check time found, will check all recent media")
+
     def _setup_bot(self):
         """Set up bot commands and event handlers."""
 
         @self.bot.event
         async def on_ready():
+            """Handle the bot ready event."""
             logger.info(f"Logged in as {self.bot.user.name} ({self.bot.user.id})")
             logger.info(f"Connected to {len(self.bot.guilds)} guilds")
 
@@ -86,22 +109,74 @@ class PlexDiscordBot:
                     if isinstance(channel, discord.TextChannel):
                         logger.info(f"  - #{channel.name} (ID: {channel.id})")
 
-            default_channel = self.bot.get_channel(self.channel_id)
-            if default_channel:
-                logger.info(
-                    f"Found default announcement channel: #{default_channel.name}"
-                )
-                # Perform initial check for new media
-                logger.info("Performing initial check for new media...")
+            # Check if startup has already been completed
+            startup_completed = os.path.exists(self.startup_flag_file)
+
+            # Only execute the startup sequence once
+            if not startup_completed:
+                logger.info("First-time startup detected, sending welcome message")
+
+                # Create the startup flag file to prevent future startup messages
                 try:
-                    await self._check_for_new_media(manual=True)
-                    logger.info("Initial check completed successfully")
+                    with open(self.startup_flag_file, "w") as f:
+                        f.write(f"Startup completed at {datetime.now().isoformat()}")
+                    logger.info(
+                        f"Created startup flag file at {self.startup_flag_file}"
+                    )
                 except Exception as e:
-                    logger.error(f"Error during initial check: {e}", exc_info=True)
+                    logger.error(f"Failed to create startup flag file: {e}")
+
+                # Find default channel and send startup message
+                default_channel = self.bot.get_channel(self.channel_id)
+                if default_channel:
+                    logger.info(
+                        f"Found default announcement channel: #{default_channel.name}"
+                    )
+
+                    # Send startup message
+                    startup_embed = discord.Embed(
+                        title="Plex Announcer Bot Online",
+                        description="The Plex Announcer Bot is now online and monitoring your Plex server for new content.",
+                        color=discord.Color.green(),
+                        timestamp=datetime.now(),
+                    )
+                    startup_embed.add_field(
+                        name="Monitoring Libraries",
+                        value=f"Movies: {self.movie_library}\nTV Shows: {self.tv_library}",
+                        inline=False,
+                    )
+                    startup_embed.add_field(
+                        name="Check Interval",
+                        value=f"{self.check_interval // 60} minutes",
+                        inline=True,
+                    )
+                    if self.last_check_time:
+                        startup_embed.add_field(
+                            name="Last Check Time",
+                            value=self.last_check_time.strftime("%Y-%m-%d %H:%M:%S"),
+                            inline=True,
+                        )
+                    startup_embed.set_footer(text="Plex Announcer Bot")
+
+                    try:
+                        await default_channel.send(embed=startup_embed)
+                        logger.info("Sent startup message to default channel")
+                    except Exception as e:
+                        logger.error(f"Error sending startup message: {e}")
+
+                    # Perform initial check for new media
+                    logger.info("Performing initial check for new media...")
+                    try:
+                        await self._check_for_new_media(manual=True)
+                        logger.info("Initial check completed successfully")
+                    except Exception as e:
+                        logger.error(f"Error during initial check: {e}", exc_info=True)
+                else:
+                    logger.error(
+                        f"Could not find default channel with ID {self.channel_id}"
+                    )
             else:
-                logger.error(
-                    f"Could not find default channel with ID {self.channel_id}"
-                )
+                logger.info("Bot reconnected, skipping welcome message")
 
             # Check for specialized channels
             if self.movie_channel_id:
@@ -197,6 +272,13 @@ class PlexDiscordBot:
                 value=str(self.recent_episode_days),
                 inline=True,
             )
+
+            if self.last_check_time:
+                embed.add_field(
+                    name="Last Check Time",
+                    value=self.last_check_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    inline=True,
+                )
 
             # Add channel information
             default_channel = self.bot.get_channel(self.channel_id)
@@ -334,7 +416,16 @@ class PlexDiscordBot:
             logger.warning("Bot not ready, skipping media check")
             return
 
+        # Record the current time at the start of the check
+        current_check_time = datetime.now()
+
         logger.info("Checking for new media...")
+        if self.last_check_time:
+            logger.info(
+                f"Looking for content added since {self.last_check_time.isoformat()}"
+            )
+        else:
+            logger.info("No previous check time, checking all recent content")
 
         # Get the default notification channel
         default_channel = self.bot.get_channel(self.channel_id)
@@ -363,7 +454,9 @@ class PlexDiscordBot:
 
         # Check for new movies
         if self.notify_movies:
-            movies = self.plex_monitor.get_recently_added_movies(days=1)
+            movies = self.plex_monitor.get_recently_added_movies(
+                since_datetime=self.last_check_time, days=1
+            )
             for movie in movies:
                 if movie["key"] not in self.processed_media:
                     new_items.append({"item": movie, "channel": movie_channel})
@@ -371,7 +464,9 @@ class PlexDiscordBot:
 
         # Check for new TV episodes
         if self.notify_new_shows or self.notify_recent_episodes:
-            episodes = self.plex_monitor.get_recently_added_episodes(days=1)
+            episodes = self.plex_monitor.get_recently_added_episodes(
+                since_datetime=self.last_check_time, days=1
+            )
 
             # Group episodes by show
             shows = {}
@@ -464,6 +559,11 @@ class PlexDiscordBot:
 
         # Save processed media to file
         save_processed_media(self.processed_media, self.data_file)
+
+        # Update and save the last check time
+        self.last_check_time = current_check_time
+        save_last_check_time(self.last_check_time, self.timestamp_file)
+        logger.info(f"Updated last check time to {self.last_check_time.isoformat()}")
 
         if new_items:
             logger.info(f"Sent notifications for {len(new_items)} new items")
