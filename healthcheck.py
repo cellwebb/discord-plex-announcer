@@ -31,11 +31,9 @@ def main():
 
     # Try to connect to Plex
     try:
-        plex_monitor = PlexMonitor(
-            plex_base_url=plex_base_url, plex_token=plex_token, connect_retry=1
-        )
+        plex_monitor = PlexMonitor(base_url=plex_base_url, token=plex_token, connect_retry=1)
 
-        if not plex_monitor.connect():
+        if not plex_monitor.plex:
             print("ERROR: Failed to connect to Plex server")
             sys.exit(1)
 

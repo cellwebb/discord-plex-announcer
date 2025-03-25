@@ -5,10 +5,12 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    command: sh /app/start.sh
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./.env:/app/.env
+      - ./start.sh:/app/start.sh
     healthcheck:
       test: ["CMD", "python", "healthcheck.py"]
       interval: 1m

@@ -12,7 +12,7 @@ from plex_announcer.utils.logging_config import configure_logging
 logger = configure_logging(log_file="healthcheck.log")
 
 
-async def check_discord_connection(token):
+async def check_discord_connection(token: str) -> bool:
     """
     Check if we can connect to Discord.
 
@@ -44,17 +44,8 @@ async def check_discord_connection(token):
         return False
 
 
-def check_plex_connection(url, token):
-    """
-    Check if we can connect to Plex.
-
-    Args:
-        url (str): Plex server URL.
-        token (str): Plex authentication token.
-
-    Returns:
-        bool: True if connection is successful, False otherwise.
-    """
+def check_plex_connection(url: str, token: str) -> bool:
+    """Check if we can connect to Plex."""
     if not url or not token:
         logger.error("Plex URL or token not provided")
         return False
@@ -69,16 +60,8 @@ def check_plex_connection(url, token):
         return False
 
 
-def check_data_file(data_file):
-    """
-    Check if the data file is accessible and valid.
-
-    Args:
-        data_file (str): Path to the data file.
-
-    Returns:
-        bool: True if the file is accessible, False otherwise.
-    """
+def check_data_file(data_file: str) -> bool:
+    """Check if the data file is accessible and valid."""
     try:
         if os.path.exists(data_file):
             # Check if the file is readable
@@ -100,7 +83,7 @@ def check_data_file(data_file):
         return False
 
 
-async def run_healthcheck():
+async def run_healthcheck() -> bool:
     """Run all healthchecks and return overall status."""
     from dotenv import load_dotenv
 

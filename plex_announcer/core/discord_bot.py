@@ -2,6 +2,7 @@
 Discord bot implementation for sending Plex media notifications.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -23,29 +24,27 @@ class PlexDiscordBot:
     def __init__(
         self,
         token: str,
-        channel_id: int,
         plex_monitor,
         check_interval: int,
+        movie_channel_id: int,
+        new_shows_channel_id: int,
+        recent_episodes_channel_id: int,
+        bot_debug_channel_id: int,
         notify_movies: bool = True,
         notify_new_shows: bool = True,
         notify_recent_episodes: bool = True,
         recent_episode_days: int = 30,
         movie_library: str = "Movies",
         tv_library: str = "TV Shows",
-        movie_channel_id: Optional[int] = None,
-        new_shows_channel_id: Optional[int] = None,
-        recent_episodes_channel_id: Optional[int] = None,
     ):
         """Initialize the Discord bot with configuration parameters."""
         self.token = token
-        self.channel_id = channel_id  # Default channel for all announcements
-        self.movie_channel_id = movie_channel_id  # Specific channel for movie announcements
-        self.new_shows_channel_id = (
-            new_shows_channel_id  # Specific channel for new show announcements
-        )
+        self.movie_channel_id = movie_channel_id  # Channel for movie announcements
+        self.new_shows_channel_id = new_shows_channel_id  # Channel for new show announcements
         self.recent_episodes_channel_id = (
-            recent_episodes_channel_id  # Specific channel for recent episode announcements
+            recent_episodes_channel_id  # Channel for recent episode announcements
         )
+        self.bot_debug_channel_id = bot_debug_channel_id  # Channel to show bot presence in
         self.plex_monitor = plex_monitor
         self.movie_library = movie_library
         self.tv_library = tv_library
@@ -74,6 +73,20 @@ class PlexDiscordBot:
         else:
             logger.info("No previous check time found, will check all recent media")
 
+    @property
+    def timestamp_file(self) -> str:
+        """Get the path to the timestamp file."""
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "last_check_time.txt")
+
+    @property
+    def startup_flag_file(self) -> str:
+        """Get the path to the startup flag file."""
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, "startup_completed.txt")
+
     def _setup_bot(self):
         """Set up bot commands and event handlers."""
 
@@ -91,6 +104,54 @@ class PlexDiscordBot:
                     if isinstance(channel, discord.TextChannel):
                         logger.info(f"  - #{channel.name} (ID: {channel.id})")
 
+            # Set bot presence based on recent media
+            debug_channel = self.bot.get_channel(self.bot_debug_channel_id)
+
+            # Try to get recent movies
+            try:
+                # Check if Plex is connected
+                if not self.plex_monitor.plex:
+                    logger.warning("Plex server not connected, using default activity")
+                    activity_name = "for Plex to connect..."
+                else:
+                    recent_movies = self.plex_monitor.get_recently_added_movies(days=7)
+                    recent_episodes = self.plex_monitor.get_recently_added_episodes(days=7)
+
+                    if recent_movies and len(recent_movies) > 0:
+                        # Use the most recent movie for presence
+                        latest_movie = recent_movies[0]
+                        movie_title = latest_movie.get("title", "a movie")
+                        activity_name = f"📽️ {movie_title}"
+                        logger.info(f"Setting activity to recent movie: {movie_title}")
+                    elif recent_episodes and len(recent_episodes) > 0:
+                        # Use the most recent show for presence
+                        latest_episode = recent_episodes[0]
+                        show_title = latest_episode.get("show_title", "a show")
+                        activity_name = f"📺 {show_title}"
+                        logger.info(f"Setting activity to recent show: {show_title}")
+                    else:
+                        # Default presence when no recent media
+                        activity_name = "for new movies..."
+                        logger.info("No recent media found, setting default activity")
+            except Exception as e:
+                logger.error(f"Error setting activity status: {e}")
+                # Default presence on error
+                await self.bot.change_presence(
+                    activity=discord.Activity(
+                        type=discord.ActivityType.watching, name="Plex for new media"
+                    )
+                )
+                return
+
+            # Set the activity
+            await self.bot.change_presence(
+                activity=discord.Activity(type=discord.ActivityType.watching, name=activity_name)
+            )
+
+            if debug_channel:
+                logger.info(f"Debug channel found: #{debug_channel.name}")
+            else:
+                logger.warning(f"Debug channel ID {self.bot_debug_channel_id} not found")
             # Check if startup has already been completed
             startup_completed = os.path.exists(self.startup_flag_file)
 
@@ -107,9 +168,9 @@ class PlexDiscordBot:
                     logger.error(f"Failed to create startup flag file: {e}")
 
                 # Find default channel and send startup message
-                default_channel = self.bot.get_channel(self.channel_id)
-                if default_channel:
-                    logger.info(f"Found default announcement channel: #{default_channel.name}")
+                debug_channel = self.bot.get_channel(self.bot_debug_channel_id)
+                if debug_channel:
+                    logger.info(f"Found bot debug channel: #{debug_channel.name}")
 
                     # Send startup message
                     startup_embed = discord.Embed(
@@ -137,20 +198,40 @@ class PlexDiscordBot:
                     startup_embed.set_footer(text="Plex Announcer Bot")
 
                     try:
-                        await default_channel.send(embed=startup_embed)
-                        logger.info("Sent startup message to default channel")
+                        await debug_channel.send(embed=startup_embed)
+                        logger.info("Sent startup message to bot debug channel")
                     except Exception as e:
                         logger.error(f"Error sending startup message: {e}")
 
                     # Perform initial check for new media
                     logger.info("Performing initial check for new media...")
                     try:
-                        await self._check_for_new_media(manual=True)
-                        logger.info("Initial check completed successfully")
+                        await self._check_for_new_media(manual=False)
                     except Exception as e:
                         logger.error(f"Error during initial check: {e}", exc_info=True)
+                        # Send error message to presence channel
+                        error_embed = discord.Embed(
+                            title="Plex Connection Error",
+                            description="Failed to connect to Plex server during initial check. Will retry on next scheduled check.",
+                            color=discord.Color.red(),
+                            timestamp=datetime.now(),
+                        )
+                        error_embed.add_field(
+                            name="Error",
+                            value=str(e)[:1024],  # Limit to 1024 characters for Discord embed
+                            inline=False,
+                        )
+                        error_embed.set_footer(text="Plex Announcer Bot")
+
+                        try:
+                            await debug_channel.send(embed=error_embed)
+                            logger.info("Sent error message to bot debug channel")
+                        except Exception as e_inner:
+                            logger.error(f"Error sending error message: {e_inner}")
                 else:
-                    logger.error(f"Could not find default channel with ID {self.channel_id}")
+                    logger.error(
+                        f"Could not find bot debug channel with ID {self.bot_debug_channel_id}"
+                    )
             else:
                 logger.info("Bot reconnected, skipping welcome message")
 
@@ -249,32 +330,29 @@ class PlexDiscordBot:
                 )
 
             # Add channel information
-            default_channel = self.bot.get_channel(self.channel_id)
-            default_channel_name = f"#{default_channel.name}" if default_channel else "Not found"
-            embed.add_field(name="Default Channel", value=default_channel_name, inline=True)
+            movie_channel = self.bot.get_channel(self.movie_channel_id)
+            movie_channel_name = f"#{movie_channel.name}" if movie_channel else "Not found"
+            embed.add_field(name="Movie Channel", value=movie_channel_name, inline=True)
 
-            if self.movie_channel_id:
-                movie_channel = self.bot.get_channel(self.movie_channel_id)
-                movie_channel_name = f"#{movie_channel.name}" if movie_channel else "Not found"
-                embed.add_field(name="Movie Channel", value=movie_channel_name, inline=True)
+            new_shows_channel = self.bot.get_channel(self.new_shows_channel_id)
+            new_shows_channel_name = (
+                f"#{new_shows_channel.name}" if new_shows_channel else "Not found"
+            )
+            embed.add_field(name="New Shows Channel", value=new_shows_channel_name, inline=True)
 
-            if self.new_shows_channel_id:
-                new_shows_channel = self.bot.get_channel(self.new_shows_channel_id)
-                new_shows_channel_name = (
-                    f"#{new_shows_channel.name}" if new_shows_channel else "Not found"
-                )
-                embed.add_field(name="New Shows Channel", value=new_shows_channel_name, inline=True)
+            recent_episodes_channel = self.bot.get_channel(self.recent_episodes_channel_id)
+            recent_episodes_name = (
+                f"#{recent_episodes_channel.name}" if recent_episodes_channel else "Not found"
+            )
+            embed.add_field(
+                name="Recent Episodes Channel",
+                value=recent_episodes_name,
+                inline=True,
+            )
 
-            if self.recent_episodes_channel_id:
-                recent_episodes_channel = self.bot.get_channel(self.recent_episodes_channel_id)
-                recent_episodes_name = (
-                    f"#{recent_episodes_channel.name}" if recent_episodes_channel else "Not found"
-                )
-                embed.add_field(
-                    name="Recent Episodes Channel",
-                    value=recent_episodes_name,
-                    inline=True,
-                )
+            debug_channel = self.bot.get_channel(self.bot_debug_channel_id)
+            debug_channel_name = f"#{debug_channel.name}" if debug_channel else "Not found"
+            embed.add_field(name="Debug Channel", value=debug_channel_name, inline=True)
 
             embed.add_field(name="Media Entries", value=str(len(self.processed_media)), inline=True)
 
@@ -357,14 +435,47 @@ class PlexDiscordBot:
         # Start the media check task
         self.check_media_task.start()
 
-        # Run the bot
-        await self.bot.start(self.token)
+        try:
+            # Run the bot with a timeout
+            logger.info("Starting Discord bot connection")
+            # Run the bot with a timeout
+            await asyncio.wait_for(self.bot.start(self.token), timeout=60)
+        except asyncio.TimeoutError:
+            logger.error(
+                "Timed out while connecting to Discord. Please check your connection and token."
+            )
+            return
+        except Exception as e:
+            logger.error(f"Error starting Discord bot: {e}")
+            return
 
     async def _check_for_new_media(self, manual: bool = False):
         """Check for new media and send Discord notifications."""
         if not self.bot.is_ready():
             logger.warning("Bot not ready, skipping media check")
             return
+
+        # Check if Plex is connected
+        if not self.plex_monitor.plex:
+            logger.warning("Plex server not connected, attempting to reconnect...")
+            # Try to reconnect
+            if not self.plex_monitor.connect():
+                logger.error("Failed to connect to Plex server, skipping media check")
+
+                # If this was a manual check, send a message to the user
+                if manual and self.bot.is_ready():
+                    debug_channel = self.bot.get_channel(self.bot_debug_channel_id)
+                    if debug_channel:
+                        error_embed = discord.Embed(
+                            title="Plex Connection Error",
+                            description="Failed to connect to Plex server. Will retry on next scheduled check.",
+                            color=discord.Color.red(),
+                            timestamp=datetime.now(),
+                        )
+                        await debug_channel.send(embed=error_embed)
+                return
+            else:
+                logger.info("Successfully reconnected to Plex server")
 
         # Record the current time at the start of the check
         current_check_time = datetime.now()
@@ -376,27 +487,14 @@ class PlexDiscordBot:
             logger.info("No previous check time, checking all recent content")
 
         # Get the default notification channel
-        default_channel = self.bot.get_channel(self.channel_id)
-        if not default_channel:
-            logger.error(f"Could not find default channel with ID {self.channel_id}")
+        movie_channel = self.bot.get_channel(self.movie_channel_id)
+        if not movie_channel:
+            logger.error(f"Could not find movie channel with ID {self.movie_channel_id}")
             return
 
         # Get specialized channels if configured
-        movie_channel = (
-            self.bot.get_channel(self.movie_channel_id)
-            if self.movie_channel_id
-            else default_channel
-        )
-        new_shows_channel = (
-            self.bot.get_channel(self.new_shows_channel_id)
-            if self.new_shows_channel_id
-            else default_channel
-        )
-        recent_episodes_channel = (
-            self.bot.get_channel(self.recent_episodes_channel_id)
-            if self.recent_episodes_channel_id
-            else default_channel
-        )
+        new_shows_channel = self.bot.get_channel(self.new_shows_channel_id)
+        recent_episodes_channel = self.bot.get_channel(self.recent_episodes_channel_id)
 
         new_items = []
 
@@ -436,7 +534,7 @@ class PlexDiscordBot:
 
                     # Only add episodes that match our notification criteria
                     should_add = False
-                    target_channel = default_channel
+                    target_channel = movie_channel
 
                     # Add if it's a new show and we're notifying for new shows
                     if self.notify_new_shows and is_first_episode:

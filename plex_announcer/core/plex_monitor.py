@@ -45,7 +45,7 @@ class PlexMonitor:
             try:
                 logger.info(f"Connection attempt {attempt + 1}/{self.connect_retry}")
                 # Set timeout for initial connection only
-                self.plex = PlexServer(self.plex_base_url, self.plex_token, timeout=10)
+                self.plex = PlexServer(self.plex_base_url, self.plex_token, timeout=30)
                 logger.info(f"Successfully connected to Plex server: {self.plex.friendlyName}")
                 return True
             except Unauthorized as e:
@@ -72,6 +72,7 @@ class PlexMonitor:
                 return None
 
         try:
+            # YOU CANNOT SET TIMEOUT HERE
             library = self.plex.library.section(library_name)
             logger.info(f"Found library: {library_name}")
             return library
@@ -114,6 +115,7 @@ class PlexMonitor:
             try:
                 # Get all movies sorted by addedAt in descending order
                 # Explicitly specify only valid filter fields
+                # YOU CANNOT SET TIMEOUT HERE
                 recent_movies: List[Movie] = library.search(libtype="movie", sort="addedAt:desc")
             except (ConnectionError, ReadTimeout, socket.timeout) as e:
                 logger.error("Error getting recently added movies: %s", e)
@@ -211,6 +213,7 @@ class PlexMonitor:
             try:
                 # Get all episodes sorted by addedAt in descending order
                 # Explicitly specify only valid filter fields
+                # YOU CANNOT SET TIMEOUT HERE
                 recent_episodes: List[Episode] = library.searchEpisodes(sort="addedAt:desc")
             except (ConnectionError, ReadTimeout, socket.timeout) as e:
                 logger.error("Error getting recently added episodes: %s", e)
@@ -232,6 +235,7 @@ class PlexMonitor:
                         show_content_rating = "Not Rated"
 
                         try:
+                            # YOU CANNOT SET TIMEOUT HERE
                             show = episode.show()
                             if hasattr(show, "thumb") and show.thumb:
                                 show_poster_url = f"{self.plex_base_url}{show.thumb}?X-Plex-Token={self.plex_token}"  # noqa: E501
