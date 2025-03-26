@@ -76,6 +76,7 @@ async def main():
             check_interval=config.check_interval,
             webhook_enabled=config.webhook_enabled,
             webhook_port=config.webhook_port,
+            webhook_host=config.webhook_host,
         )
 
         logger.info("Starting Discord bot")

@@ -34,10 +34,11 @@ class PlexDiscordBot:
         notify_movies: bool = True,
         notify_new_shows: bool = True,
         notify_recent_episodes: bool = True,
-        recent_episode_days: int = 7,
-        check_interval: int = 30,
+        recent_episode_days: int = 30,
+        check_interval: int = 3600,
         webhook_enabled: bool = False,
-        webhook_port: int = 8888,
+        webhook_port: int = 10000,
+        webhook_host: str = "0.0.0.0",
     ):
         """Initialize the Discord bot."""
         self.token = token
@@ -57,6 +58,7 @@ class PlexDiscordBot:
         self.check_interval = check_interval
         self.webhook_enabled = webhook_enabled
         self.webhook_port = webhook_port
+        self.webhook_host = webhook_host
         self.webhook_server = None
 
         # Internal state
@@ -451,27 +453,34 @@ class PlexDiscordBot:
         async def on_ready():
             await self._on_ready()
 
-        # Start the webhook server if enabled
+        # Start webhook server first if enabled
+        webhook_server_started = False
         if self.webhook_enabled:
             try:
                 from plex_announcer.core.webhook_server import PlexWebhookServer
 
-                self.webhook_server = PlexWebhookServer(self, port=self.webhook_port)
+                logger.info(f"Starting webhook server on {self.webhook_host}:{self.webhook_port}")
+                self.webhook_server = PlexWebhookServer(
+                    self, host=self.webhook_host, port=self.webhook_port
+                )
                 await self.webhook_server.start()
-                logger.info(f"Webhook server started on port {self.webhook_port}")
+                webhook_server_started = True
+                logger.info(
+                    f"Webhook server started successfully on {self.webhook_host}:{self.webhook_port}"
+                )
             except Exception as e:
-                logger.error(f"Failed to start webhook server: {e}")
+                logger.error(f"Failed to start webhook server: {e}", exc_info=True)
 
-        # Run the bot with a timeout
+        # Run the Discord bot
         try:
-            await asyncio.wait_for(self.bot.start(self.token), timeout=60)
-        except asyncio.TimeoutError:
-            logger.error(
-                "Timed out while connecting to Discord. Please check your connection and token."
-            )
-            return
+            logger.info("Starting Discord bot")
+            await self.bot.start(self.token)
         except Exception as e:
-            logger.error(f"Error starting Discord bot: {e}")
+            logger.error(f"Error starting Discord bot: {e}", exc_info=True)
+        finally:
+            if webhook_server_started and self.webhook_server:
+                logger.info("Stopping webhook server")
+                await self.webhook_server.stop()
 
     # Webhook handling methods
     async def announce_new_movie_from_webhook(self, metadata: dict):
